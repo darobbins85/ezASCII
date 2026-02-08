@@ -1,8 +1,9 @@
 const express = require('express');
 const multer = require('multer');
-const { Jimp, loadFont, measureText } = require('jimp');
+const { Jimp, rgbaToInt } = require('jimp');
 const path = require('path');
 const fs = require('fs');
+const { execSync } = require('child_process');
 
 const app = express();
 const upload = multer({ dest: 'uploads/' });
@@ -19,6 +20,30 @@ const ASCII_CHARSETS = {
     blocks: ' ▓▒░ ',
     minimal: ' .:-#'
 };
+
+function getAvailableFonts() {
+    try {
+        const fontList = execSync('fc-list : family 2>/dev/null', { encoding: 'utf8' });
+        const fonts = fontList.split('\n')
+            .filter(f => f.trim())
+            .map(f => f.split(',')[0].trim())
+            .filter(f => f.length > 0)
+            .filter(f => !f.match(/[0-9a-z]+Arabic|Hebrew|Chinese|Japanese|Korean|Thai|Cyrillic|Greek|Indic/))
+            .filter(f => f.length < 30)
+            .sort()
+            .filter((f, i, arr) => arr.indexOf(f) === i)
+            .slice(0, 30);
+        return fonts.length > 0 ? fonts : ['Arial', 'Times New Roman', 'Courier New', 'Georgia', 'Verdana', 'Monaco', 'Menlo', 'Consolas'];
+    } catch {
+        return ['Arial', 'Times New Roman', 'Courier New', 'Georgia', 'Verdana', 'Monaco', 'Menlo', 'Consolas'];
+    }
+}
+
+const AVAILABLE_FONTS = getAvailableFonts();
+
+app.get('/fonts', (req, res) => {
+    res.json({ fonts: AVAILABLE_FONTS });
+});
 
 async function convertToAscii(imagePath, options = {}) {
     const { width = 200, height = 100, charset = 'detailed', invert = false, flipH = false, flipV = false } = options;
@@ -55,9 +80,6 @@ async function convertToAscii(imagePath, options = {}) {
         maxY = image.height - 1;
     }
     
-    const cropWidth = maxX - minX + 1;
-    const cropHeight = maxY - minY + 1;
-    
     const chars = ASCII_CHARSETS[charset] || ASCII_CHARSETS.detailed;
     const charCount = chars.length;
     
@@ -84,47 +106,23 @@ async function convertToAscii(imagePath, options = {}) {
     return asciiArt.trimEnd();
 }
 
-async function renderTextToImage(text, fontSize, textWeight, maxWidth, maxHeight) {
-    const availableSizes = [8, 10, 12, 14, 16, 32, 64, 128];
-    const closestSize = availableSizes.reduce((prev, curr) => 
-        Math.abs(curr - fontSize) < Math.abs(prev - fontSize) ? curr : prev
-    );
-    
-    const fontPath = path.join(__dirname, 'node_modules', '@jimp', 'plugin-print', 'dist', 'fonts', 'open-sans', `open-sans-${closestSize}-${textWeight}`, `open-sans-${closestSize}-${textWeight}.fnt`);
-    const font = await loadFont(fontPath);
-    
-    const lines = text.split('\n');
-    const lineHeight = Math.floor(closestSize * 1.2);
-    const totalHeight = lines.length * lineHeight;
-    
-    let maxLineWidth = 0;
-    for (const line of lines) {
-        const width = measureText(font, line);
-        if (width > maxLineWidth) maxLineWidth = width;
-    }
-    
-    const imageWidth = Math.max(maxLineWidth + 20, 100);
-    const imageHeight = Math.max(totalHeight + 20, 50);
-    
-    const image = new Jimp({ width: imageWidth, height: imageHeight });
-    image.scan(0, 0, imageWidth, imageHeight, (x, y, idx) => {
-        image.setPixelColor(0xffffffff, x, y);
-    });
-    
-    let yOffset = 10;
-    for (const line of lines) {
-        const xOffset = 10;
-        image.print({ font, x: xOffset, y: yOffset, text: line });
-        yOffset += lineHeight;
-    }
-    
-    return image;
-}
-
-async function convertTextToAscii(imagePath, options = {}) {
+async function processImageData(imageDataObj, options = {}) {
     const { width = 200, height = 100, charset = 'detailed', invert = false, flipH = false, flipV = false } = options;
     
-    const image = await Jimp.read(imagePath);
+    const image = new Jimp({ width: imageDataObj.width, height: imageDataObj.height });
+    
+    for (let y = 0; y < imageDataObj.height; y++) {
+        for (let x = 0; x < imageDataObj.width; x++) {
+            const idx = (y * imageDataObj.width + x) * 4;
+            const r = imageDataObj.data[idx];
+            const g = imageDataObj.data[idx + 1];
+            const b = imageDataObj.data[idx + 2];
+            const a = imageDataObj.data[idx + 3];
+            const color = rgbaToInt(r, g, b, a);
+            image.setPixelColor(color, x, y);
+        }
+    }
+    
     await image.resize({ w: width, h: height });
     
     if (flipH) image.flip({ horizontal: true, vertical: false });
@@ -185,29 +183,22 @@ async function convertTextToAscii(imagePath, options = {}) {
 app.post('/convert', upload.single('image'), async (req, res) => {
     const mode = req.body?.mode || 'image';
     
-    if (mode === 'text') {
+    if (mode === 'textImage') {
         try {
-            const text = req.body?.text || '';
+            const imageDataStr = req.body?.imageData;
+            if (!imageDataStr) {
+                return res.status(400).json({ error: 'No image data provided' });
+            }
+            
+            const imageData = JSON.parse(imageDataStr);
             const width = parseInt(req.body?.maxWidth) || 200;
             const height = parseInt(req.body?.maxHeight) || 100;
             const charset = req.body?.charset || 'detailed';
             const invert = req.body?.invert === 'true';
             const flipH = req.body?.flipH === 'true';
             const flipV = req.body?.flipV === 'true';
-            const fontSize = parseInt(req.body?.fontSize) || 40;
-            const textWeight = req.body?.textWeight || 'black';
-            const textColor = req.body?.textColor || '#00d4ff';
             
-            if (!text.trim()) {
-                return res.status(400).json({ error: 'No text provided' });
-            }
-            
-            const image = await renderTextToImage(text, fontSize, textWeight, width, height);
-            const tempPath = path.join(__dirname, 'uploads', `text_${Date.now()}.png`);
-            await image.write(tempPath);
-            
-            const asciiArt = await convertTextToAscii(tempPath, { width, height, charset, invert, flipH, flipV });
-            fs.unlinkSync(tempPath);
+            const asciiArt = await processImageData(imageData, { width, height, charset, invert, flipH, flipV });
             
             const outputFileName = `ascii_${Date.now()}.txt`;
             const outputPath = path.join(__dirname, 'output', outputFileName);
@@ -219,7 +210,7 @@ app.post('/convert', upload.single('image'), async (req, res) => {
                 downloadUrl: `/output/${outputFileName}`
             });
         } catch (error) {
-            console.error('TEXT CONVERSION ERROR:', error.message);
+            console.error('TEXT IMAGE ERROR:', error.message);
             res.status(500).json({ error: 'Failed to convert text: ' + error.message });
         }
         return;

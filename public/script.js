@@ -9,9 +9,38 @@ const invertCheckbox = document.getElementById('invert');
 const flipHCheckbox = document.getElementById('flipH');
 const flipVCheckbox = document.getElementById('flipV');
 const textInput = document.getElementById('textInput');
+const textFontSelect = document.getElementById('textFont');
 const textSizeInput = document.getElementById('textSize');
-const textWeightInput = document.getElementById('textWeight');
 const textColorInput = document.getElementById('textColor');
+
+async function loadFonts() {
+    try {
+        const response = await fetch('/fonts');
+        const data = await response.json();
+        textFontSelect.innerHTML = '';
+        data.fonts.slice(0, 25).forEach(font => {
+            const option = document.createElement('option');
+            option.value = font;
+            option.textContent = font;
+            textFontSelect.appendChild(option);
+        });
+        if (textFontSelect.options.length > 0) {
+            textFontSelect.value = 'Liberation Sans';
+        }
+    } catch (e) {
+        console.log('Failed to load fonts, using defaults');
+        const defaults = ['Arial', 'Liberation Sans', 'Liberation Serif', 'Courier New', 'Monaco', 'Noto Sans', 'DejaVu Sans'];
+        textFontSelect.innerHTML = '';
+        defaults.forEach(font => {
+            const option = document.createElement('option');
+            option.value = font;
+            option.textContent = font;
+            textFontSelect.appendChild(option);
+        });
+    }
+}
+
+loadFonts();
 const toast = document.getElementById('toast');
 
 let lastUploadedFile = null;
@@ -50,7 +79,7 @@ textSizeInput.addEventListener('change', () => {
     }
 });
 
-textWeightInput.addEventListener('change', () => {
+textFontSelect.addEventListener('change', () => {
     if (textInput.value.trim()) {
         uploadText(textInput.value);
     }
@@ -141,22 +170,49 @@ async function uploadText(text) {
     const invert = invertCheckbox.checked;
     const flipH = flipHCheckbox.checked;
     const flipV = flipVCheckbox.checked;
-    const fontSize = textSizeInput.value;
-    const textWeight = textWeightInput.value;
+    const textFont = textFontSelect.value;
+    const textSize = textSizeInput.value;
     const textColor = textColorInput.value;
 
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const fontSize = parseInt(textSize) * 3;
+    ctx.font = `${fontSize}px ${textFont}`;
+    const metrics = ctx.measureText(text);
+    const textWidth = metrics.width;
+    const lineHeight = fontSize * 1.2;
+    const lines = text.split('\n');
+    const maxLineWidth = Math.max(...lines.map(line => ctx.measureText(line).width));
+    const canvasWidth = maxLineWidth + 40;
+    const canvasHeight = lines.length * lineHeight + 40;
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+    ctx.font = `${fontSize}px ${textFont}`;
+    ctx.fillStyle = textColor;
+    ctx.textBaseline = 'top';
+    let yOffset = 20;
+    for (const line of lines) {
+        ctx.fillText(line, 20, yOffset);
+        yOffset += lineHeight;
+    }
+    
+    const imageData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
+    
     const formData = new FormData();
-    formData.append('text', text);
+    formData.append('imageData', JSON.stringify({
+        width: imageData.width,
+        height: imageData.height,
+        data: Array.from(imageData.data)
+    }));
     formData.append('maxWidth', width);
     formData.append('maxHeight', height);
     formData.append('charset', charset);
     formData.append('invert', invert);
     formData.append('flipH', flipH);
     formData.append('flipV', flipV);
-    formData.append('fontSize', fontSize);
-    formData.append('textWeight', textWeight);
-    formData.append('textColor', textColor);
-    formData.append('mode', 'text');
+    formData.append('mode', 'textImage');
 
     try {
         const response = await fetch('/convert', {
