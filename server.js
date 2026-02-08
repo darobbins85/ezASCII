@@ -29,12 +29,41 @@ async function convertToAscii(imagePath, options = {}) {
     if (flipH) image.flip({ horizontal: true, vertical: false });
     if (flipV) image.flip({ horizontal: false, vertical: true });
     
+    let minX = image.width, maxX = 0, minY = image.height, maxY = 0;
+    
+    for (let y = 0; y < image.height; y++) {
+        for (let x = 0; x < image.width; x++) {
+            const pixel = image.getPixelColor(x, y);
+            const r = (pixel >> 24) & 255;
+            const g = (pixel >> 16) & 255;
+            const b = (pixel >> 8) & 255;
+            const brightness = Math.floor((r + g + b) / 3);
+            
+            if (brightness < 250) {
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+                if (y < minY) minY = y;
+                if (y > maxY) maxY = y;
+            }
+        }
+    }
+    
+    if (minX >= maxX || minY >= maxY) {
+        minX = 0;
+        maxX = image.width - 1;
+        minY = 0;
+        maxY = image.height - 1;
+    }
+    
+    const cropWidth = maxX - minX + 1;
+    const cropHeight = maxY - minY + 1;
+    
     const chars = ASCII_CHARSETS[charset] || ASCII_CHARSETS.detailed;
     const charCount = chars.length;
     
     let asciiArt = '';
-    for (let y = 0; y < image.height; y++) {
-        for (let x = 0; x < image.width; x++) {
+    for (let y = minY; y <= maxY; y++) {
+        for (let x = minX; x <= maxX; x++) {
             const pixel = image.getPixelColor(x, y);
             const r = (pixel >> 24) & 255;
             const g = (pixel >> 16) & 255;
@@ -52,7 +81,7 @@ async function convertToAscii(imagePath, options = {}) {
         asciiArt += '\n';
     }
     
-    return asciiArt;
+    return asciiArt.trimEnd();
 }
 
 app.post('/convert', upload.single('image'), async (req, res) => {
