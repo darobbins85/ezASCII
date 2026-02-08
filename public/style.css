@@ -74,13 +74,46 @@ body {
     font-size: 14px;
 }
 
-.settings input {
+.settings input[type="number"] {
     background: #0f0f23;
     border: 1px solid #00d4ff;
     color: #eee;
     padding: 10px;
     border-radius: 6px;
     font-size: 16px;
+}
+
+.settings select {
+    background: #0f0f23;
+    border: 1px solid #00d4ff;
+    color: #eee;
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.settings select option {
+    background: #0f0f23;
+    color: #eee;
+}
+
+.checkbox-label {
+    flex-direction: row !important;
+    align-items: center;
+    gap: 10px !important;
+    cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: #00ff88;
+}
+
+.checkbox-label span {
+    color: #eee;
 }
 
 .action-buttons {

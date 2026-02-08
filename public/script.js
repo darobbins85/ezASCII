@@ -4,6 +4,10 @@ const copyBtn = document.getElementById('copyBtn');
 const downloadBtn = document.getElementById('downloadBtn');
 const widthInput = document.getElementById('maxWidth');
 const heightInput = document.getElementById('maxHeight');
+const charsetSelect = document.getElementById('charset');
+const invertCheckbox = document.getElementById('invert');
+const flipHCheckbox = document.getElementById('flipH');
+const flipVCheckbox = document.getElementById('flipV');
 const toast = document.getElementById('toast');
 
 let lastUploadedFile = null;
@@ -17,16 +21,13 @@ fileInput.addEventListener('change', () => {
     }
 });
 
-widthInput.addEventListener('change', () => {
-    if (lastUploadedFile) {
-        uploadImage(lastUploadedFile);
-    }
-});
-
-heightInput.addEventListener('change', () => {
-    if (lastUploadedFile) {
-        uploadImage(lastUploadedFile);
-    }
+const optionInputs = [widthInput, heightInput, charsetSelect, invertCheckbox, flipHCheckbox, flipVCheckbox];
+optionInputs.forEach(input => {
+    input.addEventListener('change', () => {
+        if (lastUploadedFile) {
+            uploadImage(lastUploadedFile);
+        }
+    });
 });
 
 copyBtn.addEventListener('click', async () => {
@@ -51,10 +52,19 @@ function showToast(message) {
 async function uploadImage(file) {
     const width = widthInput.value;
     const height = heightInput.value;
+    const charset = charsetSelect.value;
+    const invert = invertCheckbox.checked;
+    const flipH = flipHCheckbox.checked;
+    const flipV = flipVCheckbox.checked;
+    
     const formData = new FormData();
     formData.append('image', file);
     formData.append('maxWidth', width);
     formData.append('maxHeight', height);
+    formData.append('charset', charset);
+    formData.append('invert', invert);
+    formData.append('flipH', flipH);
+    formData.append('flipV', flipV);
 
     try {
         const response = await fetch('/convert', {

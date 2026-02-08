@@ -26,6 +26,27 @@
                 Height (chars)
                 <input type="number" id="maxHeight" value="100" min="10" max="200">
             </label>
+            <label>
+                Charset
+                <select id="charset">
+                    <option value="simple">Simple ( .:-=+*#%)</option>
+                    <option value="detailed" selected>Detailed ( $@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\|()1{}[]?-_+~<>i!lI;:,"^`'. )</option>
+                    <option value="blocks">Blocks ( ▓▒░ )</option>
+                    <option value="minimal">Minimal ( .:-#)</option>
+                </select>
+            </label>
+            <label class="checkbox-label">
+                <input type="checkbox" id="invert">
+                <span>Invert Colors</span>
+            </label>
+            <label class="checkbox-label">
+                <input type="checkbox" id="flipH">
+                <span>Flip Horizontal</span>
+            </label>
+            <label class="checkbox-label">
+                <input type="checkbox" id="flipV">
+                <span>Flip Vertical</span>
+            </label>
         </div>
         
         <div class="action-buttons">
