@@ -10,6 +10,7 @@ const flipHCheckbox = document.getElementById('flipH');
 const flipVCheckbox = document.getElementById('flipV');
 const textInput = document.getElementById('textInput');
 const textSizeInput = document.getElementById('textSize');
+const textWeightInput = document.getElementById('textWeight');
 const textColorInput = document.getElementById('textColor');
 const toast = document.getElementById('toast');
 
@@ -44,6 +45,12 @@ textInput.addEventListener('input', () => {
 });
 
 textSizeInput.addEventListener('change', () => {
+    if (textInput.value.trim()) {
+        uploadText(textInput.value);
+    }
+});
+
+textWeightInput.addEventListener('change', () => {
     if (textInput.value.trim()) {
         uploadText(textInput.value);
     }
@@ -135,6 +142,7 @@ async function uploadText(text) {
     const flipH = flipHCheckbox.checked;
     const flipV = flipVCheckbox.checked;
     const fontSize = textSizeInput.value;
+    const textWeight = textWeightInput.value;
     const textColor = textColorInput.value;
 
     const formData = new FormData();
@@ -146,6 +154,7 @@ async function uploadText(text) {
     formData.append('flipH', flipH);
     formData.append('flipV', flipV);
     formData.append('fontSize', fontSize);
+    formData.append('textWeight', textWeight);
     formData.append('textColor', textColor);
     formData.append('mode', 'text');
 

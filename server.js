@@ -84,13 +84,13 @@ async function convertToAscii(imagePath, options = {}) {
     return asciiArt.trimEnd();
 }
 
-async function renderTextToImage(text, fontSize, textColor, maxWidth, maxHeight) {
+async function renderTextToImage(text, fontSize, textWeight, maxWidth, maxHeight) {
     const availableSizes = [8, 10, 12, 14, 16, 32, 64, 128];
     const closestSize = availableSizes.reduce((prev, curr) => 
         Math.abs(curr - fontSize) < Math.abs(prev - fontSize) ? curr : prev
     );
     
-    const fontPath = path.join(__dirname, 'node_modules', '@jimp', 'plugin-print', 'dist', 'fonts', 'open-sans', `open-sans-${closestSize}-black`, `open-sans-${closestSize}-black.fnt`);
+    const fontPath = path.join(__dirname, 'node_modules', '@jimp', 'plugin-print', 'dist', 'fonts', 'open-sans', `open-sans-${closestSize}-${textWeight}`, `open-sans-${closestSize}-${textWeight}.fnt`);
     const font = await loadFont(fontPath);
     
     const lines = text.split('\n');
@@ -195,13 +195,14 @@ app.post('/convert', upload.single('image'), async (req, res) => {
             const flipH = req.body?.flipH === 'true';
             const flipV = req.body?.flipV === 'true';
             const fontSize = parseInt(req.body?.fontSize) || 40;
+            const textWeight = req.body?.textWeight || 'black';
             const textColor = req.body?.textColor || '#00d4ff';
             
             if (!text.trim()) {
                 return res.status(400).json({ error: 'No text provided' });
             }
             
-            const image = await renderTextToImage(text, fontSize, textColor, width, height);
+            const image = await renderTextToImage(text, fontSize, textWeight, width, height);
             const tempPath = path.join(__dirname, 'uploads', `text_${Date.now()}.png`);
             await image.write(tempPath);
             
