@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image to ASCII Art Converter</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="sidebar">
+        <h1>ASCII Art Generator</h1>
+        
+        <div class="upload-section">
+            <div class="file-input-wrapper">
+                <input type="file" id="fileInput" accept="image/*">
+                <button class="choose-btn" onclick="document.getElementById('fileInput').click()">Choose Image</button>
+            </div>
+        </div>
+        
+        <div class="settings">
+            <label>
+                Width (chars)
+                <input type="number" id="maxWidth" value="200" min="10" max="300">
+            </label>
+            <label>
+                Height (chars)
+                <input type="number" id="maxHeight" value="100" min="10" max="200">
+            </label>
+        </div>
+        
+        <div class="action-buttons">
+            <button class="copy-btn" id="copyBtn" disabled>Copy to Clipboard</button>
+            <a class="download-btn" id="downloadBtn" download disabled>Download .txt</a>
+        </div>
+    </div>
+    
+    <div class="main-content">
+        <div class="result-section">
+            <div class="preview-container">
+                <pre id="asciiPreview" class="ascii-preview"><span class="empty-state">Upload an image to see ASCII preview</span></pre>
+            </div>
+        </div>
+    </div>
+    
+    <div class="toast" id="toast">Copied to clipboard!</div>
+    <script src="script.js"></script>
+</body>
+</html>
