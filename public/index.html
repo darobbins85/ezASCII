@@ -10,10 +10,34 @@
     <div class="sidebar">
         <h1>ASCII Art Generator</h1>
         
-        <div class="upload-section">
-            <div class="file-input-wrapper">
-                <input type="file" id="fileInput" accept="image/*">
-                <button class="choose-btn" onclick="document.getElementById('fileInput').click()">Choose Image</button>
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="image">Image</button>
+            <button class="tab-btn" data-tab="text">Text</button>
+        </div>
+        
+        <div class="tab-content active" id="image-tab">
+            <div class="upload-section">
+                <div class="file-input-wrapper">
+                    <input type="file" id="fileInput" accept="image/*">
+                    <button class="choose-btn" onclick="document.getElementById('fileInput').click()">Choose Image</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="tab-content" id="text-tab">
+            <div class="settings">
+                <label>
+                    Enter Text
+                    <textarea id="textInput" rows="3" placeholder="Type your text here..."></textarea>
+                </label>
+                <label>
+                    Font Size
+                    <input type="number" id="textSize" value="40" min="10" max="100">
+                </label>
+                <label>
+                    Text Color
+                    <input type="color" id="textColor" value="#00d4ff">
+                </label>
             </div>
         </div>
         

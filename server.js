@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const { Jimp } = require('jimp');
+const { Jimp, loadFont, measureText } = require('jimp');
 const path = require('path');
 const fs = require('fs');
 
@@ -84,7 +84,146 @@ async function convertToAscii(imagePath, options = {}) {
     return asciiArt.trimEnd();
 }
 
+async function renderTextToImage(text, fontSize, textColor, maxWidth, maxHeight) {
+    const availableSizes = [8, 10, 12, 14, 16, 32, 64, 128];
+    const closestSize = availableSizes.reduce((prev, curr) => 
+        Math.abs(curr - fontSize) < Math.abs(prev - fontSize) ? curr : prev
+    );
+    
+    const fontPath = path.join(__dirname, 'node_modules', '@jimp', 'plugin-print', 'dist', 'fonts', 'open-sans', `open-sans-${closestSize}-black`, `open-sans-${closestSize}-black.fnt`);
+    const font = await loadFont(fontPath);
+    
+    const lines = text.split('\n');
+    const lineHeight = Math.floor(closestSize * 1.2);
+    const totalHeight = lines.length * lineHeight;
+    
+    let maxLineWidth = 0;
+    for (const line of lines) {
+        const width = measureText(font, line);
+        if (width > maxLineWidth) maxLineWidth = width;
+    }
+    
+    const imageWidth = Math.max(maxLineWidth + 20, 100);
+    const imageHeight = Math.max(totalHeight + 20, 50);
+    
+    const image = new Jimp({ width: imageWidth, height: imageHeight });
+    image.scan(0, 0, imageWidth, imageHeight, (x, y, idx) => {
+        image.setPixelColor(0xffffffff, x, y);
+    });
+    
+    let yOffset = 10;
+    for (const line of lines) {
+        const xOffset = 10;
+        image.print({ font, x: xOffset, y: yOffset, text: line });
+        yOffset += lineHeight;
+    }
+    
+    return image;
+}
+
+async function convertTextToAscii(imagePath, options = {}) {
+    const { width = 200, height = 100, charset = 'detailed', invert = false, flipH = false, flipV = false } = options;
+    
+    const image = await Jimp.read(imagePath);
+    await image.resize({ w: width, h: height });
+    
+    if (flipH) image.flip({ horizontal: true, vertical: false });
+    if (flipV) image.flip({ horizontal: false, vertical: true });
+    
+    let minX = image.width, maxX = 0, minY = image.height, maxY = 0;
+    
+    for (let y = 0; y < image.height; y++) {
+        for (let x = 0; x < image.width; x++) {
+            const pixel = image.getPixelColor(x, y);
+            const r = (pixel >> 24) & 255;
+            const g = (pixel >> 16) & 255;
+            const b = (pixel >> 8) & 255;
+            const brightness = Math.floor((r + g + b) / 3);
+            
+            if (brightness < 250) {
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+                if (y < minY) minY = y;
+                if (y > maxY) maxY = y;
+            }
+        }
+    }
+    
+    if (minX >= maxX || minY >= maxY) {
+        minX = 0;
+        maxX = image.width - 1;
+        minY = 0;
+        maxY = image.height - 1;
+    }
+    
+    const chars = ASCII_CHARSETS[charset] || ASCII_CHARSETS.detailed;
+    const charCount = chars.length;
+    
+    let asciiArt = '';
+    for (let y = minY; y <= maxY; y++) {
+        for (let x = minX; x <= maxX; x++) {
+            const pixel = image.getPixelColor(x, y);
+            const r = (pixel >> 24) & 255;
+            const g = (pixel >> 16) & 255;
+            const b = (pixel >> 8) & 255;
+            let brightness = Math.floor((r + g + b) / 3);
+            
+            if (invert) {
+                brightness = 255 - brightness;
+            }
+            
+            const charIndex = Math.floor((brightness / 255) * (charCount - 1));
+            const char = chars[invert ? charCount - 1 - charIndex : charIndex];
+            asciiArt += char;
+        }
+        asciiArt += '\n';
+    }
+    
+    return asciiArt.trimEnd();
+}
+
 app.post('/convert', upload.single('image'), async (req, res) => {
+    const mode = req.body?.mode || 'image';
+    
+    if (mode === 'text') {
+        try {
+            const text = req.body?.text || '';
+            const width = parseInt(req.body?.maxWidth) || 200;
+            const height = parseInt(req.body?.maxHeight) || 100;
+            const charset = req.body?.charset || 'detailed';
+            const invert = req.body?.invert === 'true';
+            const flipH = req.body?.flipH === 'true';
+            const flipV = req.body?.flipV === 'true';
+            const fontSize = parseInt(req.body?.fontSize) || 40;
+            const textColor = req.body?.textColor || '#00d4ff';
+            
+            if (!text.trim()) {
+                return res.status(400).json({ error: 'No text provided' });
+            }
+            
+            const image = await renderTextToImage(text, fontSize, textColor, width, height);
+            const tempPath = path.join(__dirname, 'uploads', `text_${Date.now()}.png`);
+            await image.write(tempPath);
+            
+            const asciiArt = await convertTextToAscii(tempPath, { width, height, charset, invert, flipH, flipV });
+            fs.unlinkSync(tempPath);
+            
+            const outputFileName = `ascii_${Date.now()}.txt`;
+            const outputPath = path.join(__dirname, 'output', outputFileName);
+            fs.writeFileSync(outputPath, asciiArt);
+            
+            res.json({ 
+                success: true, 
+                ascii: asciiArt,
+                downloadUrl: `/output/${outputFileName}`
+            });
+        } catch (error) {
+            console.error('TEXT CONVERSION ERROR:', error.message);
+            res.status(500).json({ error: 'Failed to convert text: ' + error.message });
+        }
+        return;
+    }
+    
     if (!req.file) {
         return res.status(400).json({ error: 'No image uploaded' });
     }
