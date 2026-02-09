@@ -199,7 +199,7 @@ async function uploadText(text) {
     const canvasHeight = lines.length * lineHeight + 40;
     canvas.width = canvasWidth;
     canvas.height = canvasHeight;
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
     ctx.font = `${fontSize}px "${textFont}"`;
     ctx.fillStyle = textColor;
