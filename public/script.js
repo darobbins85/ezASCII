@@ -47,6 +47,35 @@ textInput.addEventListener('input', () => {
     }
 });
 
+async function loadFonts() {
+    try {
+        const response = await fetch('/fonts');
+        const data = await response.json();
+        textFontSelect.innerHTML = '';
+        data.fonts.slice(0, 25).forEach(font => {
+            const option = document.createElement('option');
+            option.value = font;
+            option.textContent = font;
+            textFontSelect.appendChild(option);
+        });
+        if (textFontSelect.options.length > 0) {
+            textFontSelect.value = 'Liberation Sans';
+        }
+    } catch (e) {
+        console.log('Failed to load fonts, using defaults');
+        const defaults = ['Arial', 'Liberation Sans', 'Liberation Serif', 'Courier New', 'Monaco', 'Noto Sans', 'DejaVu Sans'];
+        textFontSelect.innerHTML = '';
+        defaults.forEach(font => {
+            const option = document.createElement('option');
+            option.value = font;
+            option.textContent = font;
+            textFontSelect.appendChild(option);
+        });
+    }
+}
+
+loadFonts();
+
 textSizeInput.addEventListener('change', () => {
     if (textInput.value.trim()) {
         uploadText(textInput.value);
