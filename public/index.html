@@ -59,14 +59,36 @@
                 Charset
                 <select id="charset">
                     <option value="simple">Simple ( .:-=+*#%)</option>
-                    <option value="detailed" selected>Detailed ( $@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\|()1{}[]?-_+~<>i!lI;:,"^`'. )</option>
+                    <option value="detailed" selected>Detailed ( $@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\|()1{}[]?-_+~&lt;&gt;i!lI;:,&quot;^`'. )</option>
                     <option value="blocks">Blocks ( ▓▒░ )</option>
                     <option value="minimal">Minimal ( .:-#)</option>
+                    <option value="binary">Binary ( █)</option>
+                    <option value="starburst">Starburst ( .*+-oO#%@)</option>
+                    <option value="brackets">Brackets ( [](){}&lt;&gt;)</option>
+                    <option value="lines">Lines ( |\\/-:.,)</option>
+                    <option value="box">Box Drawing ( ┌┐└┘├┤┬┴┼)</option>
+                    <option value="braille">Braille ( ⠁⠂⠄⠆)</option>
+                    <option value="at">At Sign ( @)</option>
+                    <option value="slash">Slashes ( /\\|)</option>
+                    <option value="hash">Hash ( #)</option>
+                    <option value="geometric">Geometric ( ┌┐└┘├┤┬┴┼)</option>
                 </select>
             </label>
             <label class="checkbox-label">
                 <input type="checkbox" id="invert">
                 <span>Invert Colors</span>
+            </label>
+            <label class="checkbox-label">
+                <input type="checkbox" id="threshold">
+                <span>Threshold Mode</span>
+            </label>
+            <label>
+                Brightness
+                <input type="range" id="brightness" value="0" min="-100" max="100">
+            </label>
+            <label>
+                Contrast
+                <input type="range" id="contrast" value="0" min="-100" max="100">
             </label>
             <label class="checkbox-label">
                 <input type="checkbox" id="flipH">

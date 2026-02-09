@@ -6,41 +6,15 @@ const widthInput = document.getElementById('maxWidth');
 const heightInput = document.getElementById('maxHeight');
 const charsetSelect = document.getElementById('charset');
 const invertCheckbox = document.getElementById('invert');
+const thresholdCheckbox = document.getElementById('threshold');
+const brightnessInput = document.getElementById('brightness');
+const contrastInput = document.getElementById('contrast');
 const flipHCheckbox = document.getElementById('flipH');
 const flipVCheckbox = document.getElementById('flipV');
 const textInput = document.getElementById('textInput');
 const textFontSelect = document.getElementById('textFont');
 const textSizeInput = document.getElementById('textSize');
 const textColorInput = document.getElementById('textColor');
-
-async function loadFonts() {
-    try {
-        const response = await fetch('/fonts');
-        const data = await response.json();
-        textFontSelect.innerHTML = '';
-        data.fonts.slice(0, 25).forEach(font => {
-            const option = document.createElement('option');
-            option.value = font;
-            option.textContent = font;
-            textFontSelect.appendChild(option);
-        });
-        if (textFontSelect.options.length > 0) {
-            textFontSelect.value = 'Liberation Sans';
-        }
-    } catch (e) {
-        console.log('Failed to load fonts, using defaults');
-        const defaults = ['Arial', 'Liberation Sans', 'Liberation Serif', 'Courier New', 'Monaco', 'Noto Sans', 'DejaVu Sans'];
-        textFontSelect.innerHTML = '';
-        defaults.forEach(font => {
-            const option = document.createElement('option');
-            option.value = font;
-            option.textContent = font;
-            textFontSelect.appendChild(option);
-        });
-    }
-}
-
-loadFonts();
 const toast = document.getElementById('toast');
 
 let lastUploadedFile = null;
@@ -91,9 +65,9 @@ textColorInput.addEventListener('change', () => {
     }
 });
 
-const optionInputs = [widthInput, heightInput, charsetSelect, invertCheckbox, flipHCheckbox, flipVCheckbox];
+const optionInputs = [widthInput, heightInput, charsetSelect, invertCheckbox, thresholdCheckbox, brightnessInput, contrastInput, flipHCheckbox, flipVCheckbox];
 optionInputs.forEach(input => {
-    input.addEventListener('change', () => {
+    input.addEventListener('input', () => {
         if (lastUploadedFile) {
             uploadImage(lastUploadedFile);
         } else if (textInput.value.trim()) {
@@ -126,6 +100,9 @@ async function uploadImage(file) {
     const height = heightInput.value;
     const charset = charsetSelect.value;
     const invert = invertCheckbox.checked;
+    const threshold = thresholdCheckbox.checked;
+    const brightness = brightnessInput.value;
+    const contrast = contrastInput.value;
     const flipH = flipHCheckbox.checked;
     const flipV = flipVCheckbox.checked;
 
@@ -135,6 +112,9 @@ async function uploadImage(file) {
     formData.append('maxHeight', height);
     formData.append('charset', charset);
     formData.append('invert', invert);
+    formData.append('threshold', threshold);
+    formData.append('brightness', brightness);
+    formData.append('contrast', contrast);
     formData.append('flipH', flipH);
     formData.append('flipV', flipV);
     formData.append('mode', 'image');
@@ -168,6 +148,9 @@ async function uploadText(text) {
     const height = heightInput.value;
     const charset = charsetSelect.value;
     const invert = invertCheckbox.checked;
+    const threshold = thresholdCheckbox.checked;
+    const brightness = brightnessInput.value;
+    const contrast = contrastInput.value;
     const flipH = flipHCheckbox.checked;
     const flipV = flipVCheckbox.checked;
     const textFont = textFontSelect.value;
@@ -177,7 +160,7 @@ async function uploadText(text) {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     const fontSize = parseInt(textSize) * 3;
-    ctx.font = `${fontSize}px ${textFont}`;
+    ctx.font = `${fontSize}px "${textFont}"`;
     const metrics = ctx.measureText(text);
     const textWidth = metrics.width;
     const lineHeight = fontSize * 1.2;
@@ -189,7 +172,7 @@ async function uploadText(text) {
     canvas.height = canvasHeight;
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-    ctx.font = `${fontSize}px ${textFont}`;
+    ctx.font = `${fontSize}px "${textFont}"`;
     ctx.fillStyle = textColor;
     ctx.textBaseline = 'top';
     let yOffset = 20;
@@ -210,6 +193,9 @@ async function uploadText(text) {
     formData.append('maxHeight', height);
     formData.append('charset', charset);
     formData.append('invert', invert);
+    formData.append('threshold', threshold);
+    formData.append('brightness', brightness);
+    formData.append('contrast', contrast);
     formData.append('flipH', flipH);
     formData.append('flipV', flipV);
     formData.append('mode', 'textImage');

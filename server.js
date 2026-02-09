@@ -18,7 +18,18 @@ const ASCII_CHARSETS = {
     simple: ' .:-=+*#%',
     detailed: '$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,"^`\'. ',
     blocks: ' ▓▒░ ',
-    minimal: ' .:-#'
+    minimal: ' .:-#',
+    binary: ' █',
+    starburst: ' .*+-oO#%@',
+    brackets: ' [](){}<>',
+    lines: ' |\\/-:.,',
+    hash: ' #',
+    slash: ' /\\|',
+    dot: ' .',
+    at: ' @',
+    box: ' ▖▗▘▙▚▛▜▝▞▟',
+    geometric: ' ┌┐└┘├┤┬┴┼═║╔╗╚╝╠╣╦╩╬',
+    braille: ' ⠁⠂⠄⠆⠈⠐⠠⠰⠱⠲⠴⠆⠖⠶⠸⠨⠬⠫⠯⠳⠼⠽⠾'
 };
 
 function getAvailableFonts() {
@@ -46,7 +57,7 @@ app.get('/fonts', (req, res) => {
 });
 
 async function convertToAscii(imagePath, options = {}) {
-    const { width = 200, height = 100, charset = 'detailed', invert = false, flipH = false, flipV = false } = options;
+    const { width = 200, height = 100, charset = 'detailed', invert = false, threshold = false, brightness = 0, contrast = 0, flipH = false, flipV = false } = options;
     
     const image = await Jimp.read(imagePath);
     await image.resize({ w: width, h: height });
@@ -54,17 +65,41 @@ async function convertToAscii(imagePath, options = {}) {
     if (flipH) image.flip({ horizontal: true, vertical: false });
     if (flipV) image.flip({ horizontal: false, vertical: true });
     
+    let brightnessAdj = parseInt(brightness) || 0;
+    let contrastAdj = parseInt(contrast) || 0;
+    const contrastFactor = (259 * (contrastAdj + 255)) / (255 * (259 - contrastAdj));
+    
+    for (let y = 0; y < image.height; y++) {
+        for (let x = 0; x < image.width; x++) {
+            let pixel = image.getPixelColor(x, y);
+            let r = (pixel >> 24) & 255;
+            let g = (pixel >> 16) & 255;
+            let b = (pixel >> 8) & 255;
+            
+            r = Math.min(255, Math.max(0, r + brightnessAdj));
+            g = Math.min(255, Math.max(0, g + brightnessAdj));
+            b = Math.min(255, Math.max(0, b + brightnessAdj));
+            
+            r = Math.min(255, Math.max(0, contrastFactor * (r - 128) + 128));
+            g = Math.min(255, Math.max(0, contrastFactor * (g - 128) + 128));
+            b = Math.min(255, Math.max(0, contrastFactor * (b - 128) + 128));
+            
+            pixel = rgbaToInt(Math.floor(r), Math.floor(g), Math.floor(b), 255);
+            image.setPixelColor(pixel, x, y);
+        }
+    }
+    
     let minX = image.width, maxX = 0, minY = image.height, maxY = 0;
     
     for (let y = 0; y < image.height; y++) {
         for (let x = 0; x < image.width; x++) {
             const pixel = image.getPixelColor(x, y);
-            const r = (pixel >> 24) & 255;
-            const g = (pixel >> 16) & 255;
-            const b = (pixel >> 8) & 255;
-            const brightness = Math.floor((r + g + b) / 3);
+            const br = (pixel >> 24) & 255;
+            const bg = (pixel >> 16) & 255;
+            const bb = (pixel >> 8) & 255;
+            const brightnessVal = Math.floor((br + bg + bb) / 3);
             
-            if (brightness < 250) {
+            if (brightnessVal < 250) {
                 if (x < minX) minX = x;
                 if (x > maxX) maxX = x;
                 if (y < minY) minY = y;
@@ -90,13 +125,17 @@ async function convertToAscii(imagePath, options = {}) {
             const r = (pixel >> 24) & 255;
             const g = (pixel >> 16) & 255;
             const b = (pixel >> 8) & 255;
-            let brightness = Math.floor((r + g + b) / 3);
+            let brightnessVal = Math.floor((r + g + b) / 3);
             
-            if (invert) {
-                brightness = 255 - brightness;
+            if (threshold) {
+                brightnessVal = brightnessVal >= 128 ? 255 : 0;
             }
             
-            const charIndex = Math.floor((brightness / 255) * (charCount - 1));
+            if (invert) {
+                brightnessVal = 255 - brightnessVal;
+            }
+            
+            const charIndex = Math.floor((brightnessVal / 255) * (charCount - 1));
             const char = chars[invert ? charCount - 1 - charIndex : charIndex];
             asciiArt += char;
         }
@@ -107,7 +146,7 @@ async function convertToAscii(imagePath, options = {}) {
 }
 
 async function processImageData(imageDataObj, options = {}) {
-    const { width = 200, height = 100, charset = 'detailed', invert = false, flipH = false, flipV = false } = options;
+    const { width = 200, height = 100, charset = 'detailed', invert = false, threshold = false, brightness = 0, contrast = 0, flipH = false, flipV = false } = options;
     
     const image = new Jimp({ width: imageDataObj.width, height: imageDataObj.height });
     
@@ -128,17 +167,41 @@ async function processImageData(imageDataObj, options = {}) {
     if (flipH) image.flip({ horizontal: true, vertical: false });
     if (flipV) image.flip({ horizontal: false, vertical: true });
     
+    let brightnessAdj = parseInt(brightness) || 0;
+    let contrastAdj = parseInt(contrast) || 0;
+    const contrastFactor = (259 * (contrastAdj + 255)) / (255 * (259 - contrastAdj));
+    
+    for (let y = 0; y < image.height; y++) {
+        for (let x = 0; x < image.width; x++) {
+            let pixel = image.getPixelColor(x, y);
+            let r = (pixel >> 24) & 255;
+            let g = (pixel >> 16) & 255;
+            let b = (pixel >> 8) & 255;
+            
+            r = Math.min(255, Math.max(0, r + brightnessAdj));
+            g = Math.min(255, Math.max(0, g + brightnessAdj));
+            b = Math.min(255, Math.max(0, b + brightnessAdj));
+            
+            r = Math.min(255, Math.max(0, contrastFactor * (r - 128) + 128));
+            g = Math.min(255, Math.max(0, contrastFactor * (g - 128) + 128));
+            b = Math.min(255, Math.max(0, contrastFactor * (b - 128) + 128));
+            
+            pixel = rgbaToInt(Math.floor(r), Math.floor(g), Math.floor(b), 255);
+            image.setPixelColor(pixel, x, y);
+        }
+    }
+    
     let minX = image.width, maxX = 0, minY = image.height, maxY = 0;
     
     for (let y = 0; y < image.height; y++) {
         for (let x = 0; x < image.width; x++) {
             const pixel = image.getPixelColor(x, y);
-            const r = (pixel >> 24) & 255;
-            const g = (pixel >> 16) & 255;
-            const b = (pixel >> 8) & 255;
-            const brightness = Math.floor((r + g + b) / 3);
+            const br = (pixel >> 24) & 255;
+            const bg = (pixel >> 16) & 255;
+            const bb = (pixel >> 8) & 255;
+            const brightnessVal = Math.floor((br + bg + bb) / 3);
             
-            if (brightness < 250) {
+            if (brightnessVal < 250) {
                 if (x < minX) minX = x;
                 if (x > maxX) maxX = x;
                 if (y < minY) minY = y;
@@ -164,13 +227,17 @@ async function processImageData(imageDataObj, options = {}) {
             const r = (pixel >> 24) & 255;
             const g = (pixel >> 16) & 255;
             const b = (pixel >> 8) & 255;
-            let brightness = Math.floor((r + g + b) / 3);
+            let brightnessVal = Math.floor((r + g + b) / 3);
             
-            if (invert) {
-                brightness = 255 - brightness;
+            if (threshold) {
+                brightnessVal = brightnessVal >= 128 ? 255 : 0;
             }
             
-            const charIndex = Math.floor((brightness / 255) * (charCount - 1));
+            if (invert) {
+                brightnessVal = 255 - brightnessVal;
+            }
+            
+            const charIndex = Math.floor((brightnessVal / 255) * (charCount - 1));
             const char = chars[invert ? charCount - 1 - charIndex : charIndex];
             asciiArt += char;
         }
@@ -195,10 +262,13 @@ app.post('/convert', upload.single('image'), async (req, res) => {
             const height = parseInt(req.body?.maxHeight) || 100;
             const charset = req.body?.charset || 'detailed';
             const invert = req.body?.invert === 'true';
+            const threshold = req.body?.threshold === 'true';
+            const brightness = req.body?.brightness || '0';
+            const contrast = req.body?.contrast || '0';
             const flipH = req.body?.flipH === 'true';
             const flipV = req.body?.flipV === 'true';
             
-            const asciiArt = await processImageData(imageData, { width, height, charset, invert, flipH, flipV });
+            const asciiArt = await processImageData(imageData, { width, height, charset, invert, threshold, brightness, contrast, flipH, flipV });
             
             const outputFileName = `ascii_${Date.now()}.txt`;
             const outputPath = path.join(__dirname, 'output', outputFileName);
@@ -225,10 +295,13 @@ app.post('/convert', upload.single('image'), async (req, res) => {
         const height = parseInt(req.body?.maxHeight) || 100;
         const charset = req.body?.charset || 'detailed';
         const invert = req.body?.invert === 'true';
+        const threshold = req.body?.threshold === 'true';
+        const brightness = req.body?.brightness || '0';
+        const contrast = req.body?.contrast || '0';
         const flipH = req.body?.flipH === 'true';
         const flipV = req.body?.flipV === 'true';
         
-        const asciiArt = await convertToAscii(req.file.path, { width, height, charset, invert, flipH, flipV });
+        const asciiArt = await convertToAscii(req.file.path, { width, height, charset, invert, threshold, brightness, contrast, flipH, flipV });
         
         const outputFileName = `ascii_${Date.now()}.txt`;
         const outputPath = path.join(__dirname, 'output', outputFileName);
