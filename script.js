@@ -15,11 +15,20 @@ const textFontSelect = document.getElementById('textFont');
 const textSizeInput = document.getElementById('textSize');
 const textColorInput = document.getElementById('textColor');
 const toast = document.getElementById('toast');
+const sidebar = document.getElementById('sidebar');
+const sidebarToggle = document.getElementById('sidebarToggle');
 
 let lastAsciiContent = '';
 let currentMode = 'image';
 let currentFile = null;
 let currentText = '';
+let sidebarCollapsed = false;
+
+sidebarToggle.addEventListener('click', () => {
+    sidebarCollapsed = !sidebarCollapsed;
+    sidebar.classList.toggle('collapsed', sidebarCollapsed);
+    sidebarToggle.textContent = sidebarCollapsed ? '☰' : '✕';
+});
 
 const tabBtns = document.querySelectorAll('.tab-btn');
 const tabContents = document.querySelectorAll('.tab-content');
