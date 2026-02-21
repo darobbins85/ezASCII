@@ -24,7 +24,7 @@ body {
 }
 
 .sidebar-toggle {
-    display: none;
+    display: none !important;
     position: fixed;
     top: 16px;
     left: 16px;
@@ -39,13 +39,17 @@ body {
     box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
 
+.sidebar-toggle:hover {
+    background: #ff8833;
+}
+
 .sidebar.collapsed {
     transform: translateX(-100%);
 }
 
 @media (max-width: 768px) {
     .sidebar-toggle {
-        display: block;
+        display: block !important;
     }
     
     .sidebar {
