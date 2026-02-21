@@ -1,4 +1,7 @@
-const { Jimp, rgbaToInt } = require('jimp');
+/**
+ * Client-side ASCII Art Converter
+ * Works entirely in the browser using Canvas API
+ */
 
 const ASCII_CHARSETS = {
     simple: ' .:-=+*#%',
@@ -33,10 +36,6 @@ function parseDimension(value, defaultVal, maxVal) {
     return clamp(parsed, MIN_DIMENSION, maxVal);
 }
 
-function parseBrightnessContrast(value) {
-    return parseInt(value) || 0;
-}
-
 function calculateContrastFactor(contrastAdj) {
     return (259 * (contrastAdj + 255)) / (255 * (259 - contrastAdj));
 }
@@ -53,16 +52,16 @@ function applyBrightnessContrast(r, g, b, brightnessAdj, contrastFactor) {
     return { r: Math.floor(r), g: Math.floor(g), b: Math.floor(b) };
 }
 
-function getImageBounds(image) {
-    let minX = image.width, maxX = 0, minY = image.height, maxY = 0;
+function getImageBounds(imageData, width) {
+    let minX = width, maxX = 0, minY = imageData.height, maxY = 0;
 
-    for (let y = 0; y < image.height; y++) {
-        for (let x = 0; x < image.width; x++) {
-            const pixel = image.getPixelColor(x, y);
-            const br = (pixel >> 24) & 255;
-            const bg = (pixel >> 16) & 255;
-            const bb = (pixel >> 8) & 255;
-            const brightnessVal = Math.floor((br + bg + bb) / 3);
+    for (let y = 0; y < imageData.height; y++) {
+        for (let x = 0; x < width; x++) {
+            const idx = (y * width + x) * 4;
+            const r = imageData.data[idx];
+            const g = imageData.data[idx + 1];
+            const b = imageData.data[idx + 2];
+            const brightnessVal = Math.floor((r + g + b) / 3);
 
             if (brightnessVal < 250) {
                 if (x < minX) minX = x;
@@ -75,15 +74,15 @@ function getImageBounds(image) {
 
     if (minX >= maxX || minY >= maxY) {
         minX = 0;
-        maxX = image.width - 1;
+        maxX = width - 1;
         minY = 0;
-        maxY = image.height - 1;
+        maxY = imageData.height - 1;
     }
 
     return { minX, maxX, minY, maxY };
 }
 
-function imageToAscii(image, options) {
+function imageDataToColoredAscii(imageData, width, options) {
     const {
         charset = 'detailed',
         invert = false,
@@ -94,37 +93,57 @@ function imageToAscii(image, options) {
         flipV = false
     } = options;
 
-    if (flipH) image.flip({ horizontal: true, vertical: false });
-    if (flipV) image.flip({ horizontal: false, vertical: true });
+    let data = imageData.data;
+    const w = imageData.width;
+    const h = imageData.height;
 
-    const brightnessAdj = parseBrightnessContrast(brightness);
-    const contrastAdj = parseBrightnessContrast(contrast);
-    const contrastFactor = calculateContrastFactor(contrastAdj);
-
-    for (let y = 0; y < image.height; y++) {
-        for (let x = 0; x < image.width; x++) {
-            let pixel = image.getPixelColor(x, y);
-            let r = (pixel >> 24) & 255;
-            let g = (pixel >> 16) & 255;
-            let b = (pixel >> 8) & 255;
-
-            const adjusted = applyBrightnessContrast(r, g, b, brightnessAdj, contrastFactor);
-            pixel = rgbaToInt(adjusted.r, adjusted.g, adjusted.b, 255);
-            image.setPixelColor(pixel, x, y);
+    if (flipH || flipV) {
+        const newData = new Uint8ClampedArray(data.length);
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const srcIdx = (y * w + x) * 4;
+                const dstX = flipH ? w - 1 - x : x;
+                const dstY = flipV ? h - 1 - y : y;
+                const dstIdx = (dstY * w + dstX) * 4;
+                newData[dstIdx] = data[srcIdx];
+                newData[dstIdx + 1] = data[srcIdx + 1];
+                newData[dstIdx + 2] = data[srcIdx + 2];
+                newData[dstIdx + 3] = data[srcIdx + 3];
+            }
         }
+        data = newData;
     }
 
-    const { minX, maxX, minY, maxY } = getImageBounds(image);
+    const brightnessAdj = parseInt(brightness) || 0;
+    const contrastAdj = parseInt(contrast) || 0;
+    const contrastFactor = calculateContrastFactor(contrastAdj);
+
+    const adjustedData = new Uint8ClampedArray(data.length);
+    for (let i = 0; i < data.length; i += 4) {
+        const adjusted = applyBrightnessContrast(
+            data[i], data[i + 1], data[i + 2],
+            brightnessAdj, contrastFactor
+        );
+        adjustedData[i] = adjusted.r;
+        adjustedData[i + 1] = adjusted.g;
+        adjustedData[i + 2] = adjusted.b;
+        adjustedData[i + 3] = data[i + 3];
+    }
+
+    const { minX, maxX, minY, maxY } = getImageBounds({ data: adjustedData, height: h }, w);
+
     const chars = ASCII_CHARSETS[charset] || ASCII_CHARSETS.detailed;
     const charCount = chars.length;
 
-    let asciiArt = '';
+    const result = { lines: [] };
+    
     for (let y = minY; y <= maxY; y++) {
+        const line = { chars: [] };
         for (let x = minX; x <= maxX; x++) {
-            const pixel = image.getPixelColor(x, y);
-            const r = (pixel >> 24) & 255;
-            const g = (pixel >> 16) & 255;
-            const b = (pixel >> 8) & 255;
+            const idx = (y * w + x) * 4;
+            const r = adjustedData[idx];
+            const g = adjustedData[idx + 1];
+            const b = adjustedData[idx + 2];
             let brightnessVal = Math.floor((r + g + b) / 3);
 
             if (threshold) {
@@ -137,60 +156,83 @@ function imageToAscii(image, options) {
 
             const charIndex = Math.floor((brightnessVal / 255) * (charCount - 1));
             const char = chars[invert ? charCount - 1 - charIndex : charIndex];
-            asciiArt += char;
+            
+            line.chars.push({
+                char: char,
+                color: `rgb(${r}, ${g}, ${b})`
+            });
         }
-        asciiArt += '\n';
+        result.lines.push(line);
     }
 
-    return asciiArt.trimEnd();
+    return result;
 }
 
-async function convertToAscii(imagePath, options = {}) {
+async function convertImageToColoredAscii(imageFile, options = {}) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        img.onload = () => {
+            const width = parseDimension(options.width, DEFAULT_WIDTH, MAX_WIDTH);
+            const height = parseDimension(options.height, DEFAULT_HEIGHT, MAX_HEIGHT);
+
+            const aspectRatio = img.width / img.height;
+            let drawWidth = width;
+            let drawHeight = height;
+
+            if (aspectRatio > width / height) {
+                drawHeight = Math.round(width / aspectRatio);
+            } else {
+                drawWidth = Math.round(height * aspectRatio);
+            }
+
+            canvas.width = drawWidth;
+            canvas.height = drawHeight;
+            ctx.drawImage(img, 0, 0, drawWidth, drawHeight);
+
+            const imageData = ctx.getImageData(0, 0, drawWidth, drawHeight);
+            const coloredAscii = imageDataToColoredAscii(imageData, drawWidth, options);
+            resolve(coloredAscii);
+        };
+
+        img.onerror = () => reject(new Error('Failed to load image'));
+        img.src = URL.createObjectURL(imageFile);
+    });
+}
+
+function convertCanvasToColoredAscii(canvas, options = {}) {
     const width = parseDimension(options.width, DEFAULT_WIDTH, MAX_WIDTH);
     const height = parseDimension(options.height, DEFAULT_HEIGHT, MAX_HEIGHT);
 
-    const image = await Jimp.read(imagePath);
-    await image.resize({ w: width, h: height });
+    const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d');
 
-    return imageToAscii(image, options);
-}
+    const aspectRatio = canvas.width / canvas.height;
+    let drawWidth = width;
+    let drawHeight = height;
 
-async function processImageData(imageDataObj, options = {}) {
-    const width = parseDimension(options.width, DEFAULT_WIDTH, MAX_WIDTH);
-    const height = parseDimension(options.height, DEFAULT_HEIGHT, MAX_HEIGHT);
-
-    const image = new Jimp({ width: imageDataObj.width, height: imageDataObj.height });
-
-    for (let y = 0; y < imageDataObj.height; y++) {
-        for (let x = 0; x < imageDataObj.width; x++) {
-            const idx = (y * imageDataObj.width + x) * 4;
-            const r = imageDataObj.data[idx];
-            const g = imageDataObj.data[idx + 1];
-            const b = imageDataObj.data[idx + 2];
-            const a = imageDataObj.data[idx + 3];
-            const color = rgbaToInt(r, g, b, a);
-            image.setPixelColor(color, x, y);
-        }
+    if (aspectRatio > width / height) {
+        drawHeight = Math.round(width / aspectRatio);
+    } else {
+        drawWidth = Math.round(height * aspectRatio);
     }
 
-    await image.resize({ w: width, h: height });
+    tempCanvas.width = drawWidth;
+    tempCanvas.height = drawHeight;
+    tempCtx.drawImage(canvas, 0, 0, drawWidth, drawHeight);
 
-    return imageToAscii(image, options);
+    const imageData = tempCtx.getImageData(0, 0, drawWidth, drawHeight);
+    return imageDataToColoredAscii(imageData, drawWidth, options);
 }
 
-function getAvailableFonts(fallbackFonts) {
-    const defaultFonts = fallbackFonts || ['Arial', 'Times New Roman', 'Courier New', 'Georgia', 'Verdana', 'Monaco', 'Menlo', 'Consolas'];
-    return defaultFonts;
-}
-
-module.exports = {
+window.AsciiConverter = {
     ASCII_CHARSETS,
-    convertToAscii,
-    processImageData,
-    getAvailableFonts,
+    convertImageToColoredAscii,
+    convertCanvasToColoredAscii,
     DEFAULT_WIDTH,
     DEFAULT_HEIGHT,
     MAX_WIDTH,
-    MAX_HEIGHT,
-    MIN_DIMENSION
+    MAX_HEIGHT
 };
