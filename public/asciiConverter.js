@@ -82,7 +82,7 @@ function getImageBounds(imageData, width) {
     return { minX, maxX, minY, maxY };
 }
 
-function imageDataToAscii(imageData, width, options) {
+function imageDataToColoredAscii(imageData, width, options) {
     const {
         charset = 'detailed',
         invert = false,
@@ -135,8 +135,10 @@ function imageDataToAscii(imageData, width, options) {
     const chars = ASCII_CHARSETS[charset] || ASCII_CHARSETS.detailed;
     const charCount = chars.length;
 
-    let asciiArt = '';
+    const result = { lines: [] };
+    
     for (let y = minY; y <= maxY; y++) {
+        const line = { chars: [] };
         for (let x = minX; x <= maxX; x++) {
             const idx = (y * w + x) * 4;
             const r = adjustedData[idx];
@@ -154,15 +156,19 @@ function imageDataToAscii(imageData, width, options) {
 
             const charIndex = Math.floor((brightnessVal / 255) * (charCount - 1));
             const char = chars[invert ? charCount - 1 - charIndex : charIndex];
-            asciiArt += char;
+            
+            line.chars.push({
+                char: char,
+                color: `rgb(${r}, ${g}, ${b})`
+            });
         }
-        asciiArt += '\n';
+        result.lines.push(line);
     }
 
-    return asciiArt.trimEnd();
+    return result;
 }
 
-async function convertImageToAscii(imageFile, options = {}) {
+async function convertImageToColoredAscii(imageFile, options = {}) {
     return new Promise((resolve, reject) => {
         const img = new Image();
         const canvas = document.createElement('canvas');
@@ -187,8 +193,8 @@ async function convertImageToAscii(imageFile, options = {}) {
             ctx.drawImage(img, 0, 0, drawWidth, drawHeight);
 
             const imageData = ctx.getImageData(0, 0, drawWidth, drawHeight);
-            const asciiArt = imageDataToAscii(imageData, drawWidth, options);
-            resolve(asciiArt);
+            const coloredAscii = imageDataToColoredAscii(imageData, drawWidth, options);
+            resolve(coloredAscii);
         };
 
         img.onerror = () => reject(new Error('Failed to load image'));
@@ -196,7 +202,7 @@ async function convertImageToAscii(imageFile, options = {}) {
     });
 }
 
-function convertCanvasToAscii(canvas, options = {}) {
+function convertCanvasToColoredAscii(canvas, options = {}) {
     const width = parseDimension(options.width, DEFAULT_WIDTH, MAX_WIDTH);
     const height = parseDimension(options.height, DEFAULT_HEIGHT, MAX_HEIGHT);
 
@@ -218,13 +224,13 @@ function convertCanvasToAscii(canvas, options = {}) {
     tempCtx.drawImage(canvas, 0, 0, drawWidth, drawHeight);
 
     const imageData = tempCtx.getImageData(0, 0, drawWidth, drawHeight);
-    return imageDataToAscii(imageData, drawWidth, options);
+    return imageDataToColoredAscii(imageData, drawWidth, options);
 }
 
 window.AsciiConverter = {
     ASCII_CHARSETS,
-    convertImageToAscii,
-    convertCanvasToAscii,
+    convertImageToColoredAscii,
+    convertCanvasToColoredAscii,
     DEFAULT_WIDTH,
     DEFAULT_HEIGHT,
     MAX_WIDTH,

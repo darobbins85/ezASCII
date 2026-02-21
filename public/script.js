@@ -17,8 +17,10 @@ const textSizeInput = document.getElementById('textSize');
 const textColorInput = document.getElementById('textColor');
 const toast = document.getElementById('toast');
 
-let lastUploadedFile = null;
 let lastAsciiContent = '';
+let currentMode = 'image';
+let currentFile = null;
+let currentText = '';
 
 const tabBtns = document.querySelectorAll('.tab-btn');
 const tabContents = document.querySelectorAll('.tab-content');
@@ -26,6 +28,7 @@ const tabContents = document.querySelectorAll('.tab-content');
 tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
         const tab = btn.dataset.tab;
+        currentMode = tab;
         tabBtns.forEach(b => b.classList.remove('active'));
         tabContents.forEach(c => c.classList.remove('active'));
         btn.classList.add('active');
@@ -36,14 +39,19 @@ tabBtns.forEach(btn => {
 fileInput.addEventListener('change', () => {
     const file = fileInput.files[0];
     if (file) {
-        lastUploadedFile = file;
+        currentMode = 'image';
+        currentFile = file;
+        currentText = '';
         uploadImage(file);
     }
 });
 
 textInput.addEventListener('input', () => {
-    if (textInput.value.trim()) {
-        uploadText(textInput.value);
+    currentText = textInput.value;
+    if (currentText.trim()) {
+        currentMode = 'text';
+        currentFile = null;
+        uploadText(currentText);
     }
 });
 
@@ -93,30 +101,30 @@ function populateDefaultFonts() {
 populateFonts();
 
 textSizeInput.addEventListener('change', () => {
-    if (textInput.value.trim()) {
-        uploadText(textInput.value);
+    if (currentText.trim() && currentMode === 'text') {
+        uploadText(currentText);
     }
 });
 
 textFontSelect.addEventListener('change', () => {
-    if (textInput.value.trim()) {
-        uploadText(textInput.value);
+    if (currentText.trim() && currentMode === 'text') {
+        uploadText(currentText);
     }
 });
 
 textColorInput.addEventListener('change', () => {
-    if (textInput.value.trim()) {
-        uploadText(textInput.value);
+    if (currentText.trim() && currentMode === 'text') {
+        uploadText(currentText);
     }
 });
 
 const optionInputs = [widthInput, heightInput, charsetSelect, invertCheckbox, thresholdCheckbox, brightnessInput, contrastInput, flipHCheckbox, flipVCheckbox];
 optionInputs.forEach(input => {
     input.addEventListener('input', () => {
-        if (lastUploadedFile) {
-            uploadImage(lastUploadedFile);
-        } else if (textInput.value.trim()) {
-            uploadText(textInput.value);
+        if (currentMode === 'image' && currentFile) {
+            uploadImage(currentFile);
+        } else if (currentMode === 'text' && currentText.trim()) {
+            uploadText(currentText);
         }
     });
 });
@@ -154,15 +162,83 @@ function getOptions() {
     };
 }
 
+function renderColoredAscii(coloredData) {
+    let html = '';
+    for (const line of coloredData.lines) {
+        for (const charObj of line.chars) {
+            html += `<span style="color: ${charObj.color}">${escapeHtml(charObj.char)}</span>`;
+        }
+        html += '\n';
+    }
+    asciiPreview.innerHTML = html;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function calculateOptimalDimensions(imgWidth, imgHeight) {
+    const aspectRatio = imgWidth / imgHeight;
+    
+    let optimalWidth;
+    let optimalHeight;
+    
+    if (aspectRatio > 2) {
+        optimalWidth = 300;
+        optimalHeight = Math.round(300 / aspectRatio);
+    } else if (aspectRatio > 1) {
+        optimalWidth = 200;
+        optimalHeight = Math.round(200 / aspectRatio);
+    } else if (aspectRatio < 0.5) {
+        optimalHeight = 200;
+        optimalWidth = Math.round(200 * aspectRatio);
+    } else {
+        optimalHeight = 150;
+        optimalWidth = Math.round(150 * aspectRatio);
+    }
+    
+    optimalWidth = Math.max(50, Math.min(300, optimalWidth));
+    optimalHeight = Math.max(30, Math.min(150, optimalHeight));
+    
+    return { width: optimalWidth, height: optimalHeight };
+}
+
 async function uploadImage(file) {
     try {
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(file);
+        
+        await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+            img.src = objectUrl;
+        });
+        
+        const { width: optimalWidth, height: optimalHeight } = calculateOptimalDimensions(img.width, img.height);
+        
+        widthInput.value = optimalWidth;
+        heightInput.value = optimalHeight;
+        
+        URL.revokeObjectURL(objectUrl);
+        
         const options = getOptions();
-        const asciiArt = await window.AsciiConverter.convertImageToAscii(file, options);
+        const coloredAscii = await window.AsciiConverter.convertImageToColoredAscii(file, options);
         
-        lastAsciiContent = asciiArt;
-        asciiPreview.textContent = asciiArt;
+        renderColoredAscii(coloredAscii);
         
-        downloadBtn.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(asciiArt);
+        let plainAscii = '';
+        for (const line of coloredAscii.lines) {
+            for (const charObj of line.chars) {
+                plainAscii += charObj.char;
+            }
+            plainAscii += '\n';
+        }
+        lastAsciiContent = plainAscii.trimEnd();
+        
+        const blob = new Blob([lastAsciiContent], { type: 'text/plain' });
+        downloadBtn.href = URL.createObjectURL(blob);
         downloadBtn.download = `ascii_${Date.now()}.txt`;
         downloadBtn.disabled = false;
         copyBtn.disabled = false;
@@ -183,7 +259,6 @@ async function uploadText(text) {
     const ctx = canvas.getContext('2d');
     const fontSize = textSize * 3;
     ctx.font = `${fontSize}px "${textFont}"`;
-    const metrics = ctx.measureText(text);
     const lineHeight = fontSize * 1.2;
     const lines = text.split('\n');
     const maxLineWidth = Math.max(...lines.map(line => ctx.measureText(line).width));
@@ -204,12 +279,21 @@ async function uploadText(text) {
 
     try {
         const options = getOptions();
-        const asciiArt = window.AsciiConverter.convertCanvasToAscii(canvas, options);
+        const coloredAscii = window.AsciiConverter.convertCanvasToColoredAscii(canvas, options);
         
-        lastAsciiContent = asciiArt;
-        asciiPreview.textContent = asciiArt;
+        renderColoredAscii(coloredAscii);
         
-        downloadBtn.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(asciiArt);
+        let plainAscii = '';
+        for (const line of coloredAscii.lines) {
+            for (const charObj of line.chars) {
+                plainAscii += charObj.char;
+            }
+            plainAscii += '\n';
+        }
+        lastAsciiContent = plainAscii.trimEnd();
+        
+        const blob = new Blob([lastAsciiContent], { type: 'text/plain' });
+        downloadBtn.href = URL.createObjectURL(blob);
         downloadBtn.download = `ascii_${Date.now()}.txt`;
         downloadBtn.disabled = false;
         copyBtn.disabled = false;
@@ -218,3 +302,38 @@ async function uploadText(text) {
         alert('Failed to convert text');
     }
 }
+
+async function loadDefaultPreview() {
+    try {
+        const response = await fetch('ramen.png');
+        const blob = await response.blob();
+        const file = new File([blob], 'ramen.png', { type: 'image/png' });
+        
+        currentFile = file;
+        currentMode = 'image';
+        
+        const options = getOptions();
+        const coloredAscii = await window.AsciiConverter.convertImageToColoredAscii(file, options);
+        
+        renderColoredAscii(coloredAscii);
+        
+        let plainAscii = '';
+        for (const line of coloredAscii.lines) {
+            for (const charObj of line.chars) {
+                plainAscii += charObj.char;
+            }
+            plainAscii += '\n';
+        }
+        lastAsciiContent = plainAscii.trimEnd();
+        
+        const blob2 = new Blob([lastAsciiContent], { type: 'text/plain' });
+        downloadBtn.href = URL.createObjectURL(blob2);
+        downloadBtn.download = `ascii_${Date.now()}.txt`;
+        downloadBtn.disabled = false;
+        copyBtn.disabled = false;
+    } catch (error) {
+        console.error('Failed to load default preview:', error);
+    }
+}
+
+loadDefaultPreview();
