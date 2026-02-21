@@ -1,122 +1,95 @@
 # ASCII Art Generator
 
-A web application that converts images (uploaded or text) to ASCII art.
+A client-side web application that converts images and text to ASCII art. Runs entirely in the browser - no server required!
 
 ## Features
 
-- **Image Upload**: Upload any image file to convert it to ASCII art
-- **Text to ASCII**: Enter text and render it as ASCII art with customizable fonts
-- **Multiple Charsets**: Choose from 15 different character sets (simple, detailed, blocks, braille, etc.)
-- **Image Adjustments**:
-  - Invert colors
-  - Threshold/binarization
-  - Brightness adjustment
-  - Contrast adjustment
-  - Horizontal/vertical flip
-- **Export Options**: Copy to clipboard or download as text file
+- **Image to ASCII** - Upload any image and convert it to ASCII art
+- **Text to ASCII** - Type text and render it as ASCII art with customizable fonts
+- **15 Character Sets** - Choose from simple, detailed, blocks, braille, and more
+- **Adjustments** - Invert, threshold, brightness, contrast, flip
+- **Export** - Copy to clipboard or download as text file
+- **100% Client-Side** - All processing happens in your browser
 
-## Quick Start
+## Quick Start (Local)
 
 ```bash
-# Install dependencies
-npm install
+# Clone or download the project
+cd asciiArtGenerator
 
-# Start the server
-npm start
+# Start local server (optional - can also open index.html directly)
+npx serve .
+
+# Or just open index.html in your browser
 ```
 
-Open http://localhost:3000 in your browser.
+## Deploy to GitHub Pages (Free Forever)
 
-## Available Charsets
+### Step 1: Create GitHub Repository
 
-| Name | Description |
-|------|-------------|
-| `simple` | Basic gradient: `. :-=+*#%` |
-| `detailed` | Rich character set for high detail |
-| `blocks` | Block characters: `▓▒░` |
-| `minimal` | Minimal: `. :-#` |
-| `binary` | Solid blocks: `█` |
-| `starburst` | Star pattern: `.*+-oO#%@` |
-| `brackets` | Bracket characters |
-| `lines` | Line characters |
-| `hash` | Hash only |
-| `slash` | Slash characters |
-| `dot` | Dots only |
-| `at` | At signs |
-| `box` | Box-drawing characters |
-| `geometric` | Geometric shapes |
-| `braille` | Braille patterns |
+1. Go to [github.com](https://github.com)
+2. Create a new repository (e.g., `ascii-art-generator`)
+3. Upload all files from this project
 
-## API Endpoints
+### Step 2: Enable GitHub Pages
 
-### POST /convert
+1. Go to your repository on GitHub
+2. Click **Settings** → **Pages** (left sidebar)
+3. Under **Build and deployment**:
+   - Source: **Deploy from a branch**
+   - Branch: `main` (or `master`)
+   - Folder: `/ (root)`
+4. Click **Save**
 
-Convert an image to ASCII art.
+### Step 3: Access Your Site
 
-**Form Data:**
-- `image` (file): Image file to convert
-- `maxWidth` (number): Output width (default: 200)
-- `maxHeight` (number): Output height (default: 100)
-- `charset` (string): Character set name (default: "detailed")
-- `invert` (boolean): Invert brightness
-- `threshold` (boolean): Apply threshold/binarization
-- `brightness` (number): Brightness adjustment (-255 to 255)
-- `contrast` (number): Contrast adjustment (-255 to 255)
-- `flipH` (boolean): Flip horizontally
-- `flipV` (boolean): Flip vertically
-- `mode` (string): "image" or "textImage"
-- `imageData` (string): JSON string for textImage mode
+Your site will be live at: `https://yourusername.github.io/ascii-art-generator/`
 
-**Response:**
-```json
-{
-  "success": true,
-  "ascii": "ASCII art string...",
-  "downloadUrl": "/output/ascii_1234567890.txt"
-}
-```
+## How It Works
 
-### GET /fonts
+The application uses:
+- **HTML5 Canvas API** - For image processing
+- **JavaScript** - For ASCII conversion algorithm
+- **CSS** - For styling
 
-Get available system fonts.
+No server required! All conversion happens in the user's browser.
 
-**Response:**
-```json
-{
-  "fonts": ["Arial", "Courier New", ...]
-}
-```
+## Browser Support
+
+Works in all modern browsers:
+- Chrome 80+
+- Firefox 75+
+- Safari 13+
+- Edge 80+
+
+## Donation
+
+Enjoying the tool? Consider donating!
+- PayPal: [paypal.me/darobbins85](https://paypal.me/darobbins85)
 
 ## Tech Stack
 
-- Node.js + Express
-- Jimp (image processing)
-- Multer (file uploads)
-- Vanilla JavaScript frontend
-- Jest (testing)
+- Vanilla JavaScript (ES6+)
+- HTML5 Canvas API
+- CSS3
+- (Optional) Express.js for local development
 
-## Running Tests
-
-```bash
-# Run all tests with coverage
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-```
-
-## Project Structure
+## Files
 
 ```
-asciiArtGenerator/
-├── server.js          # Express server
 ├── public/
-│   ├── index.html    # Main page
-│   ├── script.js     # Frontend logic
-│   └── style.css     # Styles
-├── tests/
-│   └── ascii.test.js # Tests
-├── output/           # Generated ASCII files
-├── uploads/          # Temporary uploads
-└── package.json
+│   ├── index.html      # Main page
+│   ├── script.js       # UI logic
+│   ├── asciiConverter.js  # Conversion algorithm
+│   ├── style.css      # Styles
+│   ├── terms.html     # Terms of service
+│   ├── privacy.html   # Privacy policy
+│   └── contact.html   # Contact page
+├── server.js          # Local dev server (optional)
+├── package.json       # Dependencies
+└── README.md          # This file
 ```
+
+## License
+
+ISC

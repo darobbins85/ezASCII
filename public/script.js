@@ -47,34 +47,50 @@ textInput.addEventListener('input', () => {
     }
 });
 
-async function loadFonts() {
-    try {
-        const response = await fetch('/fonts');
-        const data = await response.json();
-        textFontSelect.innerHTML = '';
-        data.fonts.slice(0, 25).forEach(font => {
-            const option = document.createElement('option');
-            option.value = font;
-            option.textContent = font;
-            textFontSelect.appendChild(option);
+const defaultFonts = [
+    'Arial', 'Liberation Sans', 'Courier New', 'Georgia', 'Verdana', 
+    'Monaco', 'Menlo', 'Consolas', 'Times New Roman', 'Impact'
+];
+
+function populateFonts() {
+    textFontSelect.innerHTML = '';
+    
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(() => {
+            const availableFonts = [];
+            document.fonts.forEach(font => {
+                availableFonts.push(font.family);
+            });
+            
+            const fonts = availableFonts.length > 0 ? availableFonts.slice(0, 25) : defaultFonts;
+            fonts.forEach(font => {
+                const option = document.createElement('option');
+                option.value = font;
+                option.textContent = font;
+                textFontSelect.appendChild(option);
+            });
+            
+            if (textFontSelect.options.length > 0) {
+                textFontSelect.value = 'Liberation Sans';
+            }
+        }).catch(() => {
+            populateDefaultFonts();
         });
-        if (textFontSelect.options.length > 0) {
-            textFontSelect.value = 'Liberation Sans';
-        }
-    } catch (e) {
-        console.log('Failed to load fonts, using defaults');
-        const defaults = ['Arial', 'Liberation Sans', 'Liberation Serif', 'Courier New', 'Monaco', 'Noto Sans', 'DejaVu Sans'];
-        textFontSelect.innerHTML = '';
-        defaults.forEach(font => {
-            const option = document.createElement('option');
-            option.value = font;
-            option.textContent = font;
-            textFontSelect.appendChild(option);
-        });
+    } else {
+        populateDefaultFonts();
     }
 }
 
-loadFonts();
+function populateDefaultFonts() {
+    defaultFonts.forEach(font => {
+        const option = document.createElement('option');
+        option.value = font;
+        option.textContent = font;
+        textFontSelect.appendChild(option);
+    });
+}
+
+populateFonts();
 
 textSizeInput.addEventListener('change', () => {
     if (textInput.value.trim()) {
@@ -124,74 +140,50 @@ function showToast(message) {
     }, 2000);
 }
 
+function getOptions() {
+    return {
+        width: parseInt(widthInput.value) || 200,
+        height: parseInt(heightInput.value) || 100,
+        charset: charsetSelect.value,
+        invert: invertCheckbox.checked,
+        threshold: thresholdCheckbox.checked,
+        brightness: brightnessInput.value,
+        contrast: contrastInput.value,
+        flipH: flipHCheckbox.checked,
+        flipV: flipVCheckbox.checked
+    };
+}
+
 async function uploadImage(file) {
-    const width = widthInput.value;
-    const height = heightInput.value;
-    const charset = charsetSelect.value;
-    const invert = invertCheckbox.checked;
-    const threshold = thresholdCheckbox.checked;
-    const brightness = brightnessInput.value;
-    const contrast = contrastInput.value;
-    const flipH = flipHCheckbox.checked;
-    const flipV = flipVCheckbox.checked;
-
-    const formData = new FormData();
-    formData.append('image', file);
-    formData.append('maxWidth', width);
-    formData.append('maxHeight', height);
-    formData.append('charset', charset);
-    formData.append('invert', invert);
-    formData.append('threshold', threshold);
-    formData.append('brightness', brightness);
-    formData.append('contrast', contrast);
-    formData.append('flipH', flipH);
-    formData.append('flipV', flipV);
-    formData.append('mode', 'image');
-
     try {
-        const response = await fetch('/convert', {
-            method: 'POST',
-            body: formData
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            lastAsciiContent = data.ascii;
-            asciiPreview.textContent = data.ascii;
-            downloadBtn.href = data.downloadUrl;
-            downloadBtn.download = `ascii_${Date.now()}.txt`;
-            copyBtn.disabled = false;
-            downloadBtn.disabled = false;
-        } else {
-            alert(data.error || 'Failed to convert image');
-        }
+        const options = getOptions();
+        const asciiArt = await window.AsciiConverter.convertImageToAscii(file, options);
+        
+        lastAsciiContent = asciiArt;
+        asciiPreview.textContent = asciiArt;
+        
+        downloadBtn.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(asciiArt);
+        downloadBtn.download = `ascii_${Date.now()}.txt`;
+        downloadBtn.disabled = false;
+        copyBtn.disabled = false;
     } catch (error) {
         console.error(error);
-        alert('Failed to upload image');
+        alert('Failed to convert image');
     }
 }
 
 async function uploadText(text) {
-    const width = widthInput.value;
-    const height = heightInput.value;
-    const charset = charsetSelect.value;
-    const invert = invertCheckbox.checked;
-    const threshold = thresholdCheckbox.checked;
-    const brightness = brightnessInput.value;
-    const contrast = contrastInput.value;
-    const flipH = flipHCheckbox.checked;
-    const flipV = flipVCheckbox.checked;
+    const width = parseInt(widthInput.value) || 200;
+    const height = parseInt(heightInput.value) || 100;
     const textFont = textFontSelect.value;
-    const textSize = textSizeInput.value;
+    const textSize = parseInt(textSizeInput.value) || 30;
     const textColor = textColorInput.value;
 
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    const fontSize = parseInt(textSize) * 3;
+    const fontSize = textSize * 3;
     ctx.font = `${fontSize}px "${textFont}"`;
     const metrics = ctx.measureText(text);
-    const textWidth = metrics.width;
     const lineHeight = fontSize * 1.2;
     const lines = text.split('\n');
     const maxLineWidth = Math.max(...lines.map(line => ctx.measureText(line).width));
@@ -209,44 +201,18 @@ async function uploadText(text) {
         ctx.fillText(line, 20, yOffset);
         yOffset += lineHeight;
     }
-    
-    const imageData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
-    
-    const formData = new FormData();
-    formData.append('imageData', JSON.stringify({
-        width: imageData.width,
-        height: imageData.height,
-        data: Array.from(imageData.data)
-    }));
-    formData.append('maxWidth', width);
-    formData.append('maxHeight', height);
-    formData.append('charset', charset);
-    formData.append('invert', invert);
-    formData.append('threshold', threshold);
-    formData.append('brightness', brightness);
-    formData.append('contrast', contrast);
-    formData.append('flipH', flipH);
-    formData.append('flipV', flipV);
-    formData.append('mode', 'textImage');
 
     try {
-        const response = await fetch('/convert', {
-            method: 'POST',
-            body: formData
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            lastAsciiContent = data.ascii;
-            asciiPreview.textContent = data.ascii;
-            downloadBtn.href = data.downloadUrl;
-            downloadBtn.download = `ascii_${Date.now()}.txt`;
-            copyBtn.disabled = false;
-            downloadBtn.disabled = false;
-        } else {
-            alert(data.error || 'Failed to convert text');
-        }
+        const options = getOptions();
+        const asciiArt = window.AsciiConverter.convertCanvasToAscii(canvas, options);
+        
+        lastAsciiContent = asciiArt;
+        asciiPreview.textContent = asciiArt;
+        
+        downloadBtn.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(asciiArt);
+        downloadBtn.download = `ascii_${Date.now()}.txt`;
+        downloadBtn.disabled = false;
+        copyBtn.disabled = false;
     } catch (error) {
         console.error(error);
         alert('Failed to convert text');
