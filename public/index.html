@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASCII Art Generator - Convert Images & Text to ASCII</title>
+    <meta name="description" content="Convert images and text to ASCII art instantly. Free online tool with 15+ character sets and colored ASCII output.">
+    <meta name="keywords" content="ascii art, image to ascii, text to ascii, ascii converter, ascii generator, text art">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="sidebar">
+        <pre class="logo-ascii">███████╗███████╗      █████╗ ███████╗ ██████╗██╗██╗
+██╔════╝╚══███╔╝     ██╔══██╗██╔════╝██╔════╝██║██║
+█████╗    ███╔╝█████╗███████║███████╗██║     ██║██║
+██╔══╝   ███╔╝ ╚════╝██╔══██║╚════██║██║     ██║██║
+███████╗███████╗     ██║  ██║███████║╚██████╗██║██║
+╚══════╝╚══════╝     ╚═╝  ╚═╝╚══════╝ ╚═════╝╚═╝╚═╝</pre>
+        
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="image">Image</button>
+            <button class="tab-btn" data-tab="text">Text</button>
+        </div>
+        
+        <div class="tab-content active" id="image-tab">
+            <div class="upload-section">
+                <div class="file-input-wrapper">
+                    <input type="file" id="fileInput" accept="image/*">
+                    <button class="choose-btn" onclick="document.getElementById('fileInput').click()">Choose Image</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="tab-content" id="text-tab">
+            <div class="settings">
+                <label>
+                    Enter Text
+                    <textarea id="textInput" rows="3" placeholder="Type your text here..."></textarea>
+                </label>
+                <label>
+                    Font
+                    <select id="textFont">
+                    </select>
+                </label>
+                <label>
+                    Font Size
+                    <input type="number" id="textSize" value="30" min="10" max="200">
+                </label>
+                <label>
+                    Text Color
+                    <input type="color" id="textColor" value="#00d4ff">
+                </label>
+            </div>
+        </div>
+        
+        <div class="settings">
+            <label>
+                Style
+                <select id="charset">
+                    <option value="simple">Simple ( .:-=+*#%)</option>
+                    <option value="detailed">Detailed ( $@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\|()1{}[]?-_+~&lt;&gt;i!lI;:,&quot;^`'. )</option>
+                    <option value="blocks">Blocks ( ▓▒░ )</option>
+                    <option value="minimal">Minimal ( .:-#)</option>
+                    <option value="binary" selected>Binary ( █)</option>
+                    <option value="starburst">Starburst ( .*+-oO#%@)</option>
+                    <option value="brackets">Brackets ( [](){}&lt;&gt;)</option>
+                    <option value="lines">Lines ( |\\/-:.,)</option>
+                    <option value="box">Box Drawing ( ┌┐└┘├┤┬┴┼)</option>
+                    <option value="braille">Braille ( ⠁⠂⠄⠆)</option>
+                    <option value="at">At Sign ( @)</option>
+                    <option value="slash">Slashes ( /\\|)</option>
+                    <option value="hash">Hash ( #)</option>
+                    <option value="geometric">Geometric ( ┌┐└┘├┤┬┴┼)</option>
+                </select>
+            </label>
+            <label>
+                Size
+                <input type="range" id="asciiSize" value="100" min="20" max="300">
+            </label>
+            <label>
+                Brightness
+                <input type="range" id="brightness" value="0" min="-100" max="100">
+            </label>
+            <label>
+                Contrast
+                <input type="range" id="contrast" value="0" min="-100" max="100">
+            </label>
+            <label class="checkbox-label">
+                <input type="checkbox" id="invert" checked>
+                <span>Invert</span>
+            </label>
+            <label class="checkbox-label">
+                <input type="checkbox" id="threshold">
+                <span>Threshold</span>
+            </label>
+            <label class="checkbox-label">
+                <input type="checkbox" id="flipH">
+                <span>Flip H</span>
+            </label>
+            <label class="checkbox-label">
+                <input type="checkbox" id="flipV">
+                <span>Flip V</span>
+            </label>
+        </div>
+        
+        <div class="action-buttons">
+            <button class="copy-btn" id="copyBtn" disabled>Copy to Clipboard</button>
+            <a class="download-btn" id="downloadBtn" download disabled>Download .txt</a>
+        </div>
+    </div>
+    
+    <div class="main-content">
+        <div class="result-section">
+            <div class="preview-container">
+                <pre id="asciiPreview" class="ascii-preview"><span class="empty-state"><img src="ramen.png" alt="ASCII Art Generator"><br>Upload an image to see ASCII preview</span></pre>
+            </div>
+        </div>
+    </div>
+    
+    <div class="toast" id="toast">Copied to clipboard!</div>
+    <script src="asciiConverter.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

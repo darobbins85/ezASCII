@@ -1,0 +1,54 @@
+{
+  "name": "asciiartgenerator",
+  "version": "1.0.0",
+  "description": "Image to ASCII Art Converter",
+  "main": "server.js",
+  "scripts": {
+    "test": "jest --coverage",
+    "test:watch": "jest --watch",
+    "start": "node server.js",
+    "start:prod": "NODE_ENV=production node server.js",
+    "pm2:start": "pm2 start ecosystem.config.js --env production",
+    "pm2:stop": "pm2 stop ascii-art-generator",
+    "pm2:restart": "pm2 restart ascii-art-generator",
+    "pm2:logs": "pm2 logs ascii-art-generator"
+  },
+  "keywords": [
+    "ascii",
+    "art",
+    "image",
+    "converter"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.2.1",
+    "jimp": "^1.6.0",
+    "multer": "^2.0.2"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "jest": "^30.2.0",
+    "supertest": "^7.2.2"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "coverageDirectory": "coverage",
+    "collectCoverageFrom": [
+      "asciiConverter.js",
+      "server.js",
+      "!**/node_modules/**",
+      "!**/coverage/**",
+      "!**/public/**",
+      "!**/tests/**"
+    ],
+    "testMatch": [
+      "**/tests/**/*.test.js"
+    ],
+    "verbose": true,
+    "testTimeout": 10000
+  }
+}
