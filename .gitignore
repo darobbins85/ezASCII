@@ -3,3 +3,6 @@ output/
 uploads/
 *.log
 .DS_Store
+.env
+coverage/
+logs/

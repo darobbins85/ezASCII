@@ -1,38 +1,61 @@
+require('dotenv').config();
+
 const express = require('express');
 const multer = require('multer');
-const { Jimp, rgbaToInt } = require('jimp');
 const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
+const rateLimit = require('express-rate-limit');
+const {
+    convertToAscii,
+    processImageData,
+    ASCII_CHARSETS,
+    DEFAULT_WIDTH,
+    DEFAULT_HEIGHT,
+    MAX_WIDTH,
+    MAX_HEIGHT
+} = require('./asciiConverter');
 
 const app = express();
-const upload = multer({ dest: 'uploads/' });
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
+const upload = multer({
+    dest: 'uploads/',
+    limits: {
+        fileSize: (process.env.MAX_FILE_SIZE_MB || 10) * 1024 * 1024,
+        files: 1
+    },
+    fileFilter (req, file, cb) {
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/bmp', 'image/webp'];
+        if (allowedTypes.includes(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Invalid file type. Only JPEG, PNG, GIF, BMP, and WebP are allowed.'));
+        }
+    }
+});
+
+const limiter = rateLimit({
+    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
+    message: { error: 'Too many requests, please try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
+app.use(limiter);
 app.use(express.static('public'));
 app.use('/output', express.static('output'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-const ASCII_CHARSETS = {
-    simple: ' .:-=+*#%',
-    detailed: '$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,"^`\'. ',
-    blocks: ' ▓▒░ ',
-    minimal: ' .:-#',
-    binary: ' █',
-    starburst: ' .*+-oO#%@',
-    brackets: ' [](){}<>',
-    lines: ' |\\/-:.,',
-    hash: ' #',
-    slash: ' /\\|',
-    dot: ' .',
-    at: ' @',
-    box: ' ▖▗▘▙▚▛▜▝▞▟',
-    geometric: ' ┌┐└┘├┤┬┴┼═║╔╗╚╝╠╣╦╩╬',
-    braille: ' ⠁⠂⠄⠆⠈⠐⠠⠰⠱⠲⠴⠆⠖⠶⠸⠨⠬⠫⠯⠳⠼⠽⠾'
-};
+app.use((req, res, next) => {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] ${req.method} ${req.path}`);
+    next();
+});
 
-function getAvailableFonts() {
+function getSystemFonts() {
     try {
         const fontList = execSync('fc-list : family 2>/dev/null', { encoding: 'utf8' });
         const fonts = fontList.split('\n')
@@ -44,286 +67,156 @@ function getAvailableFonts() {
             .sort()
             .filter((f, i, arr) => arr.indexOf(f) === i)
             .slice(0, 30);
-        return fonts.length > 0 ? fonts : ['Arial', 'Times New Roman', 'Courier New', 'Georgia', 'Verdana', 'Monaco', 'Menlo', 'Consolas'];
+        return fonts.length > 0 ? fonts : getDefaultFonts();
     } catch {
-        return ['Arial', 'Times New Roman', 'Courier New', 'Georgia', 'Verdana', 'Monaco', 'Menlo', 'Consolas'];
+        return getDefaultFonts();
     }
 }
 
-const AVAILABLE_FONTS = getAvailableFonts();
+function getDefaultFonts() {
+    return ['Arial', 'Times New Roman', 'Courier New', 'Georgia', 'Verdana', 'Monaco', 'Menlo', 'Consolas'];
+}
+
+const AVAILABLE_FONTS = getSystemFonts();
+
+function cleanupOldFiles(directory, maxAgeMs) {
+    const maxAge = maxAgeMs || parseInt(process.env.FILE_MAX_AGE_MS) || 60 * 60 * 1000;
+    try {
+        const files = fs.readdirSync(directory);
+        const now = Date.now();
+        files.forEach(file => {
+            const filePath = path.join(directory, file);
+            try {
+                const stats = fs.statSync(filePath);
+                if (now - stats.mtimeMs > maxAge) {
+                    fs.unlinkSync(filePath);
+                }
+            } catch {
+            }
+        });
+    } catch {
+    }
+}
+
+const cleanupInterval = parseInt(process.env.CLEANUP_INTERVAL_MS) || 15 * 60 * 1000;
+setInterval(() => {
+    cleanupOldFiles('output');
+    cleanupOldFiles('uploads');
+}, cleanupInterval);
+
+app.use((err, req, res, next) => {
+    console.error(`[ERROR] ${err.message}`);
+    if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: 'File too large. Maximum size is 10MB.' });
+    }
+    if (err.message.includes('Invalid file type')) {
+        return res.status(400).json({ error: err.message });
+    }
+    res.status(500).json({ error: 'An error occurred. Please try again.' });
+});
 
 app.get('/fonts', (req, res) => {
     res.json({ fonts: AVAILABLE_FONTS });
 });
 
-async function convertToAscii(imagePath, options = {}) {
-    const { width = 200, height = 100, charset = 'detailed', invert = false, threshold = false, brightness = 0, contrast = 0, flipH = false, flipV = false } = options;
-    
-    const image = await Jimp.read(imagePath);
-    await image.resize({ w: width, h: height });
-    
-    if (flipH) image.flip({ horizontal: true, vertical: false });
-    if (flipV) image.flip({ horizontal: false, vertical: true });
-    
-    let brightnessAdj = parseInt(brightness) || 0;
-    let contrastAdj = parseInt(contrast) || 0;
-    const contrastFactor = (259 * (contrastAdj + 255)) / (255 * (259 - contrastAdj));
-    
-    for (let y = 0; y < image.height; y++) {
-        for (let x = 0; x < image.width; x++) {
-            let pixel = image.getPixelColor(x, y);
-            let r = (pixel >> 24) & 255;
-            let g = (pixel >> 16) & 255;
-            let b = (pixel >> 8) & 255;
-            
-            r = Math.min(255, Math.max(0, r + brightnessAdj));
-            g = Math.min(255, Math.max(0, g + brightnessAdj));
-            b = Math.min(255, Math.max(0, b + brightnessAdj));
-            
-            r = Math.min(255, Math.max(0, contrastFactor * (r - 128) + 128));
-            g = Math.min(255, Math.max(0, contrastFactor * (g - 128) + 128));
-            b = Math.min(255, Math.max(0, contrastFactor * (b - 128) + 128));
-            
-            pixel = rgbaToInt(Math.floor(r), Math.floor(g), Math.floor(b), 255);
-            image.setPixelColor(pixel, x, y);
-        }
-    }
-    
-    let minX = image.width, maxX = 0, minY = image.height, maxY = 0;
-    
-    for (let y = 0; y < image.height; y++) {
-        for (let x = 0; x < image.width; x++) {
-            const pixel = image.getPixelColor(x, y);
-            const br = (pixel >> 24) & 255;
-            const bg = (pixel >> 16) & 255;
-            const bb = (pixel >> 8) & 255;
-            const brightnessVal = Math.floor((br + bg + bb) / 3);
-            
-            if (brightnessVal < 250) {
-                if (x < minX) minX = x;
-                if (x > maxX) maxX = x;
-                if (y < minY) minY = y;
-                if (y > maxY) maxY = y;
-            }
-        }
-    }
-    
-    if (minX >= maxX || minY >= maxY) {
-        minX = 0;
-        maxX = image.width - 1;
-        minY = 0;
-        maxY = image.height - 1;
-    }
-    
-    const chars = ASCII_CHARSETS[charset] || ASCII_CHARSETS.detailed;
-    const charCount = chars.length;
-    
-    let asciiArt = '';
-    for (let y = minY; y <= maxY; y++) {
-        for (let x = minX; x <= maxX; x++) {
-            const pixel = image.getPixelColor(x, y);
-            const r = (pixel >> 24) & 255;
-            const g = (pixel >> 16) & 255;
-            const b = (pixel >> 8) & 255;
-            let brightnessVal = Math.floor((r + g + b) / 3);
-            
-            if (threshold) {
-                brightnessVal = brightnessVal >= 128 ? 255 : 0;
-            }
-            
-            if (invert) {
-                brightnessVal = 255 - brightnessVal;
-            }
-            
-            const charIndex = Math.floor((brightnessVal / 255) * (charCount - 1));
-            const char = chars[invert ? charCount - 1 - charIndex : charIndex];
-            asciiArt += char;
-        }
-        asciiArt += '\n';
-    }
-    
-    return asciiArt.trimEnd();
-}
+app.get('/charsets', (req, res) => {
+    res.json({ charsets: Object.keys(ASCII_CHARSETS) });
+});
 
-async function processImageData(imageDataObj, options = {}) {
-    const { width = 200, height = 100, charset = 'detailed', invert = false, threshold = false, brightness = 0, contrast = 0, flipH = false, flipV = false } = options;
-    
-    const image = new Jimp({ width: imageDataObj.width, height: imageDataObj.height });
-    
-    for (let y = 0; y < imageDataObj.height; y++) {
-        for (let x = 0; x < imageDataObj.width; x++) {
-            const idx = (y * imageDataObj.width + x) * 4;
-            const r = imageDataObj.data[idx];
-            const g = imageDataObj.data[idx + 1];
-            const b = imageDataObj.data[idx + 2];
-            const a = imageDataObj.data[idx + 3];
-            const color = rgbaToInt(r, g, b, a);
-            image.setPixelColor(color, x, y);
-        }
-    }
-    
-    await image.resize({ w: width, h: height });
-    
-    if (flipH) image.flip({ horizontal: true, vertical: false });
-    if (flipV) image.flip({ horizontal: false, vertical: true });
-    
-    let brightnessAdj = parseInt(brightness) || 0;
-    let contrastAdj = parseInt(contrast) || 0;
-    const contrastFactor = (259 * (contrastAdj + 255)) / (255 * (259 - contrastAdj));
-    
-    for (let y = 0; y < image.height; y++) {
-        for (let x = 0; x < image.width; x++) {
-            let pixel = image.getPixelColor(x, y);
-            let r = (pixel >> 24) & 255;
-            let g = (pixel >> 16) & 255;
-            let b = (pixel >> 8) & 255;
-            
-            r = Math.min(255, Math.max(0, r + brightnessAdj));
-            g = Math.min(255, Math.max(0, g + brightnessAdj));
-            b = Math.min(255, Math.max(0, b + brightnessAdj));
-            
-            r = Math.min(255, Math.max(0, contrastFactor * (r - 128) + 128));
-            g = Math.min(255, Math.max(0, contrastFactor * (g - 128) + 128));
-            b = Math.min(255, Math.max(0, contrastFactor * (b - 128) + 128));
-            
-            pixel = rgbaToInt(Math.floor(r), Math.floor(g), Math.floor(b), 255);
-            image.setPixelColor(pixel, x, y);
-        }
-    }
-    
-    let minX = image.width, maxX = 0, minY = image.height, maxY = 0;
-    
-    for (let y = 0; y < image.height; y++) {
-        for (let x = 0; x < image.width; x++) {
-            const pixel = image.getPixelColor(x, y);
-            const br = (pixel >> 24) & 255;
-            const bg = (pixel >> 16) & 255;
-            const bb = (pixel >> 8) & 255;
-            const brightnessVal = Math.floor((br + bg + bb) / 3);
-            
-            if (brightnessVal < 250) {
-                if (x < minX) minX = x;
-                if (x > maxX) maxX = x;
-                if (y < minY) minY = y;
-                if (y > maxY) maxY = y;
-            }
-        }
-    }
-    
-    if (minX >= maxX || minY >= maxY) {
-        minX = 0;
-        maxX = image.width - 1;
-        minY = 0;
-        maxY = image.height - 1;
-    }
-    
-    const chars = ASCII_CHARSETS[charset] || ASCII_CHARSETS.detailed;
-    const charCount = chars.length;
-    
-    let asciiArt = '';
-    for (let y = minY; y <= maxY; y++) {
-        for (let x = minX; x <= maxX; x++) {
-            const pixel = image.getPixelColor(x, y);
-            const r = (pixel >> 24) & 255;
-            const g = (pixel >> 16) & 255;
-            const b = (pixel >> 8) & 255;
-            let brightnessVal = Math.floor((r + g + b) / 3);
-            
-            if (threshold) {
-                brightnessVal = brightnessVal >= 128 ? 255 : 0;
-            }
-            
-            if (invert) {
-                brightnessVal = 255 - brightnessVal;
-            }
-            
-            const charIndex = Math.floor((brightnessVal / 255) * (charCount - 1));
-            const char = chars[invert ? charCount - 1 - charIndex : charIndex];
-            asciiArt += char;
-        }
-        asciiArt += '\n';
-    }
-    
-    return asciiArt.trimEnd();
-}
+app.get('/health', (req, res) => {
+    res.json({ 
+        status: 'ok', 
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        environment: process.env.NODE_ENV || 'development'
+    });
+});
 
 app.post('/convert', upload.single('image'), async (req, res) => {
     const mode = req.body?.mode || 'image';
-    
+
     if (mode === 'textImage') {
         try {
             const imageDataStr = req.body?.imageData;
             if (!imageDataStr) {
                 return res.status(400).json({ error: 'No image data provided' });
             }
-            
+
             const imageData = JSON.parse(imageDataStr);
-            const width = parseInt(req.body?.maxWidth) || 200;
-            const height = parseInt(req.body?.maxHeight) || 100;
-            const charset = req.body?.charset || 'detailed';
-            const invert = req.body?.invert === 'true';
-            const threshold = req.body?.threshold === 'true';
-            const brightness = req.body?.brightness || '0';
-            const contrast = req.body?.contrast || '0';
-            const flipH = req.body?.flipH === 'true';
-            const flipV = req.body?.flipV === 'true';
-            
-            const asciiArt = await processImageData(imageData, { width, height, charset, invert, threshold, brightness, contrast, flipH, flipV });
-            
+            if (!imageData || !imageData.width || !imageData.height || !imageData.data) {
+                return res.status(400).json({ error: 'Invalid image data format' });
+            }
+
+            const asciiArt = await processImageData(imageData, {
+                width: Math.min(MAX_WIDTH, Math.max(10, parseInt(req.body?.maxWidth) || DEFAULT_WIDTH)),
+                height: Math.min(MAX_HEIGHT, Math.max(10, parseInt(req.body?.maxHeight) || DEFAULT_HEIGHT)),
+                charset: req.body?.charset || 'detailed',
+                invert: req.body?.invert === 'true',
+                threshold: req.body?.threshold === 'true',
+                brightness: req.body?.brightness || '0',
+                contrast: req.body?.contrast || '0',
+                flipH: req.body?.flipH === 'true',
+                flipV: req.body?.flipV === 'true'
+            });
+
             const outputFileName = `ascii_${Date.now()}.txt`;
             const outputPath = path.join(__dirname, 'output', outputFileName);
             fs.writeFileSync(outputPath, asciiArt);
-            
-            res.json({ 
-                success: true, 
+
+            res.json({
+                success: true,
                 ascii: asciiArt,
                 downloadUrl: `/output/${outputFileName}`
             });
         } catch (error) {
-            console.error('TEXT IMAGE ERROR:', error.message);
-            res.status(500).json({ error: 'Failed to convert text: ' + error.message });
+            console.error(`[ERROR] TEXT IMAGE: ${error.message}`);
+            res.status(500).json({ error: 'Failed to convert text. Please try again.' });
         }
         return;
     }
-    
+
     if (!req.file) {
         return res.status(400).json({ error: 'No image uploaded' });
     }
 
     try {
-        const width = parseInt(req.body?.maxWidth) || 200;
-        const height = parseInt(req.body?.maxHeight) || 100;
-        const charset = req.body?.charset || 'detailed';
-        const invert = req.body?.invert === 'true';
-        const threshold = req.body?.threshold === 'true';
-        const brightness = req.body?.brightness || '0';
-        const contrast = req.body?.contrast || '0';
-        const flipH = req.body?.flipH === 'true';
-        const flipV = req.body?.flipV === 'true';
-        
-        const asciiArt = await convertToAscii(req.file.path, { width, height, charset, invert, threshold, brightness, contrast, flipH, flipV });
-        
+        const asciiArt = await convertToAscii(req.file.path, {
+            width: Math.min(MAX_WIDTH, Math.max(10, parseInt(req.body?.maxWidth) || DEFAULT_WIDTH)),
+            height: Math.min(MAX_HEIGHT, Math.max(10, parseInt(req.body?.maxHeight) || DEFAULT_HEIGHT)),
+            charset: req.body?.charset || 'detailed',
+            invert: req.body?.invert === 'true',
+            threshold: req.body?.threshold === 'true',
+            brightness: req.body?.brightness || '0',
+            contrast: req.body?.contrast || '0',
+            flipH: req.body?.flipH === 'true',
+            flipV: req.body?.flipV === 'true'
+        });
+
         const outputFileName = `ascii_${Date.now()}.txt`;
         const outputPath = path.join(__dirname, 'output', outputFileName);
         fs.writeFileSync(outputPath, asciiArt);
-        
-        fs.unlinkSync(req.file.path);
-        
-        res.json({ 
-            success: true, 
+
+        if (fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path);
+        }
+
+        res.json({
+            success: true,
             ascii: asciiArt,
             downloadUrl: `/output/${outputFileName}`
         });
     } catch (error) {
-        console.error('CONVERSION ERROR:', error.message);
-        console.error(error.stack);
-        if (req.file) {
+        console.error(`[ERROR] CONVERSION: ${error.message}`);
+        if (req.file && fs.existsSync(req.file.path)) {
             fs.unlinkSync(req.file.path);
         }
-        res.status(500).json({ error: 'Failed to convert image: ' + error.message });
+        res.status(500).json({ error: 'Failed to convert image. Please try again.' });
     }
 });
 
-app.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
+const server = app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
+module.exports = { app, server };
