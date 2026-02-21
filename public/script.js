@@ -2,8 +2,7 @@ const fileInput = document.getElementById('fileInput');
 const asciiPreview = document.getElementById('asciiPreview');
 const copyBtn = document.getElementById('copyBtn');
 const downloadBtn = document.getElementById('downloadBtn');
-const widthInput = document.getElementById('maxWidth');
-const heightInput = document.getElementById('maxHeight');
+const sizeInput = document.getElementById('asciiSize');
 const charsetSelect = document.getElementById('charset');
 const invertCheckbox = document.getElementById('invert');
 const thresholdCheckbox = document.getElementById('threshold');
@@ -118,7 +117,7 @@ textColorInput.addEventListener('change', () => {
     }
 });
 
-const optionInputs = [widthInput, heightInput, charsetSelect, invertCheckbox, thresholdCheckbox, brightnessInput, contrastInput, flipHCheckbox, flipVCheckbox];
+const optionInputs = [sizeInput, charsetSelect, invertCheckbox, thresholdCheckbox, brightnessInput, contrastInput, flipHCheckbox, flipVCheckbox];
 optionInputs.forEach(input => {
     input.addEventListener('input', () => {
         if (currentMode === 'image' && currentFile) {
@@ -149,9 +148,10 @@ function showToast(message) {
 }
 
 function getOptions() {
+    const size = parseInt(sizeInput.value) || 100;
     return {
-        width: parseInt(widthInput.value) || 200,
-        height: parseInt(heightInput.value) || 100,
+        width: size,
+        height: Math.round(size * 0.5),
         charset: charsetSelect.value,
         invert: invertCheckbox.checked,
         threshold: thresholdCheckbox.checked,
@@ -216,10 +216,7 @@ async function uploadImage(file) {
             img.src = objectUrl;
         });
         
-        const { width: optimalWidth, height: optimalHeight } = calculateOptimalDimensions(img.width, img.height);
-        
-        widthInput.value = optimalWidth;
-        heightInput.value = optimalHeight;
+        const { width: optimalWidth } = calculateOptimalDimensions(img.width, img.height);
         
         URL.revokeObjectURL(objectUrl);
         
@@ -249,8 +246,9 @@ async function uploadImage(file) {
 }
 
 async function uploadText(text) {
-    const width = parseInt(widthInput.value) || 200;
-    const height = parseInt(heightInput.value) || 100;
+    const size = parseInt(sizeInput.value) || 100;
+    const width = size;
+    const height = Math.round(size * 0.5);
     const textFont = textFontSelect.value;
     const textSize = parseInt(textSizeInput.value) || 30;
     const textColor = textColorInput.value;
